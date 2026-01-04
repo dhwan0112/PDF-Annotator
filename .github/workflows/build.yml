@@ -14,7 +14,7 @@ jobs:
       matrix:
         include:
           - platform: 'macos-latest'
-            args: '--target universal-apple-darwin'
+            args: ''
             name: 'macOS'
           - platform: 'ubuntu-22.04'
             args: ''
@@ -33,12 +33,14 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: 'npm'
 
       - name: Install Rust stable
-        uses: dtolnay/rust-action@stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
         with:
-          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+          workspaces: './src-tauri -> target'
 
       - name: Install dependencies (Ubuntu)
         if: matrix.platform == 'ubuntu-22.04'
@@ -47,13 +49,12 @@ jobs:
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
 
       - name: Install frontend dependencies
-        run: npm ci
-
-      - name: Build frontend
-        run: npm run build
+        run: npm install
 
       - name: Build Tauri app
-        run: npm run tauri:build -- ${{ matrix.args }}
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload Windows Installer
         if: matrix.platform == 'windows-latest'
@@ -69,7 +70,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: macos-installer
-          path: src-tauri/target/release/bundle/dmg/*.dmg
+          path: |
+            src-tauri/target/release/bundle/macos/*.app
+            src-tauri/target/release/bundle/dmg/*.dmg
 
       - name: Upload Linux Installer
         if: matrix.platform == 'ubuntu-22.04'
