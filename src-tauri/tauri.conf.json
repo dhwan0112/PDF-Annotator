@@ -35,7 +35,42 @@
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "category": "Productivity",
+    "shortDescription": "PDF annotation and mind mapping app",
+    "longDescription": "A powerful PDF annotation application with mind mapping, bookmarks, and cloud sync capabilities.",
+    "copyright": "Copyright 2024",
+    "resources": [],
+    "windows": {
+      "certificateThumbprint": null,
+      "digestAlgorithm": "sha256",
+      "timestampUrl": "",
+      "wix": null,
+      "nsis": {
+        "installMode": "currentUser",
+        "languages": ["English", "Korean"],
+        "displayLanguageSelector": true
+      }
+    },
+    "macOS": {
+      "entitlements": null,
+      "exceptionDomain": "",
+      "frameworks": [],
+      "minimumSystemVersion": "10.13",
+      "signingIdentity": null,
+      "providerShortName": null
+    },
+    "linux": {
+      "appimage": {
+        "bundleMediaFramework": true
+      },
+      "deb": {
+        "depends": []
+      },
+      "rpm": {
+        "depends": []
+      }
+    }
   },
   "plugins": {
     "dialog": {},
