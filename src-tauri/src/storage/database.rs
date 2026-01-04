@@ -206,30 +206,30 @@ impl Database {
 
     pub fn get_documents_by_project(&self, project_id: Option<&str>) -> SqlResult<Vec<Document>> {
         let conn = self.conn.lock().unwrap();
-        let mut stmt = if project_id.is_some() {
-            conn.prepare(
+        let mut documents = Vec::new();
+
+        if let Some(pid) = project_id {
+            let mut stmt = conn.prepare(
                 "SELECT id, file_path, file_name, title, author, page_count, project_id,
                  last_opened_at, last_page, created_at, updated_at FROM documents
                  WHERE project_id = ?1 ORDER BY last_opened_at DESC NULLS LAST",
-            )?
+            )?;
+            let mut rows = stmt.query(params![pid])?;
+            while let Some(row) = rows.next()? {
+                documents.push(self.row_to_document(row)?);
+            }
         } else {
-            conn.prepare(
+            let mut stmt = conn.prepare(
                 "SELECT id, file_path, file_name, title, author, page_count, project_id,
                  last_opened_at, last_page, created_at, updated_at FROM documents
                  WHERE project_id IS NULL ORDER BY last_opened_at DESC NULLS LAST",
-            )?
-        };
-
-        let rows = if let Some(pid) = project_id {
-            stmt.query_map(params![pid], |row| self.row_to_document(row))?
-        } else {
-            stmt.query_map([], |row| self.row_to_document(row))?
-        };
-
-        let mut documents = Vec::new();
-        for doc in rows {
-            documents.push(doc?);
+            )?;
+            let mut rows = stmt.query([])?;
+            while let Some(row) = rows.next()? {
+                documents.push(self.row_to_document(row)?);
+            }
         }
+
         Ok(documents)
     }
 
