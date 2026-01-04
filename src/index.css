@@ -1,0 +1,70 @@
+@import "tailwindcss";
+
+@theme {
+  /* Custom theme colors for PDF Annotator */
+  --color-primary: #3b82f6;
+  --color-primary-hover: #2563eb;
+  --color-secondary: #6b7280;
+  --color-accent: #f59e0b;
+
+  /* Annotation colors */
+  --color-highlight-yellow: #fef08a;
+  --color-highlight-green: #bbf7d0;
+  --color-highlight-blue: #bfdbfe;
+  --color-highlight-pink: #fbcfe8;
+  --color-highlight-orange: #fed7aa;
+
+  /* Sidebar width */
+  --spacing-sidebar: 280px;
+  --spacing-sidebar-collapsed: 60px;
+}
+
+/* Dark mode theme overrides */
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+  }
+}
+
+/* Dark mode class-based toggle */
+.dark {
+  color-scheme: dark;
+}
+
+/* Base styles */
+html, body, #root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #9ca3af;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #6b7280;
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background: #4b5563;
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: #6b7280;
+}
