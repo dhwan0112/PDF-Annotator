@@ -17,6 +17,12 @@ import {
   Monitor,
   ChevronLeft,
   ChevronRight,
+  RotateCw,
+  RotateCcw,
+  Rows,
+  File,
+  Underline,
+  Strikethrough,
 } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
 import type { AnnotationTool } from "../../types";
@@ -25,6 +31,8 @@ const tools: { id: AnnotationTool; icon: typeof Pen; label: string }[] = [
   { id: "select", icon: MousePointer2, label: "Select (V)" },
   { id: "pen", icon: Pen, label: "Pen (P)" },
   { id: "highlighter", icon: Highlighter, label: "Highlighter (H)" },
+  { id: "underline", icon: Underline, label: "Underline (U)" },
+  { id: "strikeout", icon: Strikethrough, label: "Strikeout (S)" },
   { id: "eraser", icon: Eraser, label: "Eraser (E)" },
   { id: "note", icon: StickyNote, label: "Note (N)" },
   { id: "rect", icon: Square, label: "Rectangle" },
@@ -34,8 +42,19 @@ const tools: { id: AnnotationTool; icon: typeof Pen; label: string }[] = [
 export function Toolbar() {
   const { currentTool, setCurrentTool, undo, redo, undoStack, redoStack } =
     useAnnotationStore();
-  const { zoomLevel, zoomIn, zoomOut, currentPage, totalPages, goToNextPage, goToPreviousPage } =
-    usePdfStore();
+  const {
+    zoomLevel,
+    zoomIn,
+    zoomOut,
+    currentPage,
+    totalPages,
+    goToNextPage,
+    goToPreviousPage,
+    rotateClockwise,
+    rotateCounterClockwise,
+    viewMode,
+    setViewMode,
+  } = usePdfStore();
   const { theme, setTheme } = useUiStore();
 
   const handleOpenFile = async () => {
@@ -68,10 +87,14 @@ export function Toolbar() {
     setTheme(nextTheme);
   };
 
+  const toggleViewMode = () => {
+    setViewMode(viewMode === "continuous" ? "single" : "continuous");
+  };
+
   const ThemeIcon = theme === "light" ? Sun : theme === "dark" ? Moon : Monitor;
 
   return (
-    <header className="flex items-center gap-1 px-2 py-1.5 bg-gray-100 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+    <header className="flex items-center gap-1 px-2 py-1.5 bg-gray-100 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 flex-wrap">
       {/* File operations */}
       <div className="flex items-center gap-1 pr-2 border-r border-gray-300 dark:border-gray-600">
         <ToolbarButton
@@ -110,20 +133,39 @@ export function Toolbar() {
         />
       </div>
 
+      {/* View controls */}
+      <div className="flex items-center gap-1 px-2 border-r border-gray-300 dark:border-gray-600">
+        <ToolbarButton
+          icon={viewMode === "continuous" ? Rows : File}
+          label={viewMode === "continuous" ? "Single page mode" : "Continuous mode"}
+          onClick={toggleViewMode}
+        />
+        <ToolbarButton
+          icon={RotateCcw}
+          label="Rotate counter-clockwise"
+          onClick={rotateCounterClockwise}
+        />
+        <ToolbarButton
+          icon={RotateCw}
+          label="Rotate clockwise"
+          onClick={rotateClockwise}
+        />
+      </div>
+
       {/* Zoom controls */}
       <div className="flex items-center gap-1 px-2 border-r border-gray-300 dark:border-gray-600">
-        <ToolbarButton icon={ZoomOut} label="Zoom out" onClick={zoomOut} />
+        <ToolbarButton icon={ZoomOut} label="Zoom out (-)" onClick={zoomOut} />
         <span className="px-2 text-sm text-gray-700 dark:text-gray-300 min-w-[4rem] text-center">
           {Math.round(zoomLevel * 100)}%
         </span>
-        <ToolbarButton icon={ZoomIn} label="Zoom in" onClick={zoomIn} />
+        <ToolbarButton icon={ZoomIn} label="Zoom in (+)" onClick={zoomIn} />
       </div>
 
       {/* Page navigation */}
       <div className="flex items-center gap-1 px-2 border-r border-gray-300 dark:border-gray-600">
         <ToolbarButton
           icon={ChevronLeft}
-          label="Previous page"
+          label="Previous page (Page Up)"
           onClick={goToPreviousPage}
           disabled={currentPage <= 1}
         />
@@ -132,7 +174,7 @@ export function Toolbar() {
         </span>
         <ToolbarButton
           icon={ChevronRight}
-          label="Next page"
+          label="Next page (Page Down)"
           onClick={goToNextPage}
           disabled={currentPage >= totalPages}
         />

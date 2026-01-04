@@ -68,3 +68,119 @@ body {
 .dark ::-webkit-scrollbar-thumb:hover {
   background: #6b7280;
 }
+
+/* PDF.js Text Layer */
+.text-layer {
+  position: absolute;
+  text-align: initial;
+  inset: 0;
+  overflow: hidden;
+  opacity: 1;
+  line-height: 1;
+  text-size-adjust: none;
+  forced-color-adjust: none;
+  transform-origin: 0 0;
+  z-index: 2;
+}
+
+.text-layer :is(span, br) {
+  color: transparent;
+  position: absolute;
+  white-space: pre;
+  cursor: text;
+  transform-origin: 0% 0%;
+}
+
+.text-layer span.markedContent {
+  top: 0;
+  height: 0;
+}
+
+.text-layer .highlight {
+  margin: -1px;
+  padding: 1px;
+  background-color: rgba(180, 0, 170, 0.25);
+  border-radius: 4px;
+}
+
+.text-layer .highlight.appended {
+  position: initial;
+}
+
+.text-layer .highlight.begin {
+  border-radius: 4px 0 0 4px;
+}
+
+.text-layer .highlight.end {
+  border-radius: 0 4px 4px 0;
+}
+
+.text-layer .highlight.middle {
+  border-radius: 0;
+}
+
+.text-layer .highlight.selected {
+  background-color: rgba(0, 100, 0, 0.25);
+}
+
+.text-layer ::selection {
+  background: rgba(0, 0, 255, 0.25);
+}
+
+/* Annotation Layer */
+.annotation-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+}
+
+.annotation-layer.interactive {
+  pointer-events: auto;
+}
+
+.annotation-layer svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+/* Highlight annotations */
+.annotation-highlight {
+  position: absolute;
+  mix-blend-mode: multiply;
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.dark .annotation-highlight {
+  mix-blend-mode: screen;
+}
+
+/* Ink annotations */
+.annotation-ink path {
+  pointer-events: stroke;
+  cursor: pointer;
+}
+
+/* Note annotations */
+.annotation-note {
+  position: absolute;
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+/* Thumbnail styles */
+.thumbnail-item {
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.thumbnail-item:hover {
+  transform: scale(1.02);
+}
+
+.thumbnail-item.active {
+  ring: 2px solid var(--color-primary);
+}

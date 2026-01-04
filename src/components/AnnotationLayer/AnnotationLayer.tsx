@@ -1,19 +1,47 @@
-import { useAnnotationStore, usePdfStore } from "../../stores";
+import { AnnotationCanvas } from "./AnnotationCanvas";
+import { HighlightLayer } from "./HighlightLayer";
+import { NoteLayer } from "./NoteLayer";
+import { NoteCreator } from "./NoteCreator";
 
-export function AnnotationLayer() {
-  const { currentPage } = usePdfStore();
-  const { getAnnotationsForPage } = useAnnotationStore();
+interface AnnotationLayerProps {
+  pageNumber: number;
+  width: number;
+  height: number;
+  scale: number;
+}
 
-  const annotations = getAnnotationsForPage(currentPage);
-
-  if (annotations.length === 0) {
-    return null;
-  }
-
+export function AnnotationLayer({
+  pageNumber,
+  width,
+  height,
+  scale,
+}: AnnotationLayerProps) {
   return (
-    <div className="absolute inset-0 pointer-events-none">
-      {/* Annotation rendering will be implemented here */}
-      {/* This layer overlays on top of the PDF canvas */}
+    <div
+      className="absolute inset-0"
+      style={{ width, height }}
+    >
+      {/* Highlight layer (below canvas) */}
+      <HighlightLayer pageNumber={pageNumber} scale={scale} />
+
+      {/* Note creator layer (for adding new notes) */}
+      <NoteCreator
+        pageNumber={pageNumber}
+        scale={scale}
+        width={width}
+        height={height}
+      />
+
+      {/* Ink annotation canvas */}
+      <AnnotationCanvas
+        pageNumber={pageNumber}
+        width={width}
+        height={height}
+        scale={scale}
+      />
+
+      {/* Note layer (above canvas) */}
+      <NoteLayer pageNumber={pageNumber} scale={scale} />
     </div>
   );
 }

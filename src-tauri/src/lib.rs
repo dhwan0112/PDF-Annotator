@@ -14,6 +14,12 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             file::open_file_dialog,
             file::read_pdf_metadata,
+            file::save_annotations,
+            file::load_annotations,
+            file::delete_annotations,
+            file::save_bookmarks,
+            file::load_bookmarks,
+            file::delete_bookmarks,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

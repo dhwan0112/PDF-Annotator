@@ -7,6 +7,9 @@ import {
   ChevronLeft,
   ChevronRight,
 } from "lucide-react";
+import { ThumbnailPanel } from "./ThumbnailPanel";
+import { BookmarkPanel } from "./BookmarkPanel";
+import type { PDFDocumentProxy } from "pdfjs-dist";
 
 const panels = [
   { id: "thumbnails" as const, icon: FileText, label: "Thumbnails" },
@@ -15,7 +18,11 @@ const panels = [
   { id: "outline" as const, icon: List, label: "Outline" },
 ];
 
-export function Sidebar() {
+interface SidebarProps {
+  pdfDocument?: PDFDocumentProxy | null;
+}
+
+export function Sidebar({ pdfDocument }: SidebarProps) {
   const {
     sidebarVisible,
     sidebarWidth,
@@ -68,42 +75,34 @@ export function Sidebar() {
       </div>
 
       {/* Panel content */}
-      <div className="flex-1 overflow-hidden">
+      <div className="flex-1 flex flex-col overflow-hidden">
         <div className="p-4 border-b border-gray-200 dark:border-gray-700">
           <h2 className="font-semibold text-gray-900 dark:text-gray-100 capitalize">
             {activePanel}
           </h2>
         </div>
-        <div className="flex-1 overflow-auto p-4">
-          {activePanel === "thumbnails" && <ThumbnailsPanel />}
-          {activePanel === "bookmarks" && <BookmarksPanel />}
-          {activePanel === "annotations" && <AnnotationsPanel />}
-          {activePanel === "outline" && <OutlinePanel />}
+        <div className="flex-1 overflow-hidden">
+          {activePanel === "thumbnails" && (
+            <div className="h-full overflow-auto p-2">
+              <ThumbnailPanel pdfDocument={pdfDocument ?? null} />
+            </div>
+          )}
+          {activePanel === "bookmarks" && <BookmarkPanel />}
+          {activePanel === "annotations" && (
+            <div className="p-2"><AnnotationsPanel /></div>
+          )}
+          {activePanel === "outline" && (
+            <div className="p-2"><OutlinePanel /></div>
+          )}
         </div>
       </div>
     </aside>
   );
 }
 
-function ThumbnailsPanel() {
-  return (
-    <div className="text-gray-500 dark:text-gray-400 text-sm">
-      Page thumbnails will appear here when a PDF is loaded.
-    </div>
-  );
-}
-
-function BookmarksPanel() {
-  return (
-    <div className="text-gray-500 dark:text-gray-400 text-sm">
-      Bookmarks will appear here.
-    </div>
-  );
-}
-
 function AnnotationsPanel() {
   return (
-    <div className="text-gray-500 dark:text-gray-400 text-sm">
+    <div className="text-gray-500 dark:text-gray-400 text-sm p-2">
       Annotations will appear here.
     </div>
   );
@@ -111,7 +110,7 @@ function AnnotationsPanel() {
 
 function OutlinePanel() {
   return (
-    <div className="text-gray-500 dark:text-gray-400 text-sm">
+    <div className="text-gray-500 dark:text-gray-400 text-sm p-2">
       Document outline will appear here when a PDF is loaded.
     </div>
   );

@@ -12,6 +12,7 @@ interface PdfState {
 
   // View settings
   zoomLevel: number;
+  rotation: number;
   viewMode: ViewMode;
   scrollPosition: number;
 
@@ -27,15 +28,18 @@ interface PdfState {
   fitToPage: () => void;
   setViewMode: (mode: ViewMode) => void;
   setScrollPosition: (position: number) => void;
+  goToPage: (page: number) => void;
   goToNextPage: () => void;
   goToPreviousPage: () => void;
   goToFirstPage: () => void;
   goToLastPage: () => void;
+  rotateClockwise: () => void;
+  rotateCounterClockwise: () => void;
 }
 
 const ZOOM_LEVELS = [0.5, 0.75, 1.0, 1.25, 1.5, 2.0, 2.5, 3.0];
-const MIN_ZOOM = 0.5;
-const MAX_ZOOM = 3.0;
+const MIN_ZOOM = 0.25;
+const MAX_ZOOM = 4.0;
 
 export const usePdfStore = create<PdfState>((set, get) => ({
   // Initial state
@@ -44,6 +48,7 @@ export const usePdfStore = create<PdfState>((set, get) => ({
   currentPage: 1,
   totalPages: 0,
   zoomLevel: 1.0,
+  rotation: 0,
   viewMode: "continuous",
   scrollPosition: 0,
 
@@ -54,6 +59,7 @@ export const usePdfStore = create<PdfState>((set, get) => ({
       metadata,
       currentPage: 1,
       scrollPosition: 0,
+      rotation: 0,
     }),
 
   clearFile: () =>
@@ -63,6 +69,7 @@ export const usePdfStore = create<PdfState>((set, get) => ({
       currentPage: 1,
       totalPages: 0,
       scrollPosition: 0,
+      rotation: 0,
     }),
 
   setCurrentPage: (page) => {
@@ -84,6 +91,8 @@ export const usePdfStore = create<PdfState>((set, get) => ({
     const nextLevel = ZOOM_LEVELS.find((z) => z > zoomLevel);
     if (nextLevel) {
       set({ zoomLevel: nextLevel });
+    } else if (zoomLevel < MAX_ZOOM) {
+      set({ zoomLevel: Math.min(zoomLevel + 0.25, MAX_ZOOM) });
     }
   },
 
@@ -92,22 +101,29 @@ export const usePdfStore = create<PdfState>((set, get) => ({
     const prevLevel = [...ZOOM_LEVELS].reverse().find((z) => z < zoomLevel);
     if (prevLevel) {
       set({ zoomLevel: prevLevel });
+    } else if (zoomLevel > MIN_ZOOM) {
+      set({ zoomLevel: Math.max(zoomLevel - 0.25, MIN_ZOOM) });
     }
   },
 
   fitToWidth: () => {
-    // This will be implemented when we have container dimensions
     set({ zoomLevel: 1.0 });
   },
 
   fitToPage: () => {
-    // This will be implemented when we have container dimensions
     set({ zoomLevel: 1.0 });
   },
 
   setViewMode: (mode) => set({ viewMode: mode }),
 
   setScrollPosition: (position) => set({ scrollPosition: position }),
+
+  goToPage: (page) => {
+    const { totalPages } = get();
+    if (page >= 1 && page <= totalPages) {
+      set({ currentPage: page });
+    }
+  },
 
   goToNextPage: () => {
     const { currentPage, totalPages } = get();
@@ -128,5 +144,15 @@ export const usePdfStore = create<PdfState>((set, get) => ({
   goToLastPage: () => {
     const { totalPages } = get();
     set({ currentPage: totalPages });
+  },
+
+  rotateClockwise: () => {
+    const { rotation } = get();
+    set({ rotation: (rotation + 90) % 360 });
+  },
+
+  rotateCounterClockwise: () => {
+    const { rotation } = get();
+    set({ rotation: (rotation - 90 + 360) % 360 });
   },
 }));
