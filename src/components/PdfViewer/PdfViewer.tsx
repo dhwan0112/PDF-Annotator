@@ -1,76 +1,131 @@
+import { useEffect, useRef, useState, useCallback } from "react";
+import type { PDFDocumentProxy } from "pdfjs-dist";
 import { usePdfStore } from "../../stores";
-import { FileText } from "lucide-react";
+import { FileText, Loader2 } from "lucide-react";
+import { PdfPage } from "./PdfPage";
 
-export function PdfViewer() {
-  const { filePath, metadata } = usePdfStore();
+interface PdfViewerProps {
+  pdfDocument: PDFDocumentProxy | null;
+}
+
+export function PdfViewer({ pdfDocument }: PdfViewerProps) {
+  const { filePath, zoomLevel, rotation, viewMode, currentPage, setCurrentPage, totalPages } =
+    usePdfStore();
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [visiblePages, setVisiblePages] = useState<number[]>([1]);
+  const scrollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Handle scroll to update current page and visible pages
+  const handleScroll = useCallback(() => {
+    if (!containerRef.current || !pdfDocument || viewMode !== "continuous") return;
+
+    // Debounce scroll handling
+    if (scrollTimeoutRef.current) {
+      clearTimeout(scrollTimeoutRef.current);
+    }
+
+    scrollTimeoutRef.current = setTimeout(() => {
+      const container = containerRef.current;
+      if (!container) return;
+
+      const containerHeight = container.clientHeight;
+
+      // Find visible pages
+      const pageElements = container.querySelectorAll("[data-page-number]");
+      const visible: number[] = [];
+      let currentPageNum = 1;
+      let minDistance = Infinity;
+
+      pageElements.forEach((el) => {
+        const rect = el.getBoundingClientRect();
+        const containerRect = container.getBoundingClientRect();
+        const relativeTop = rect.top - containerRect.top;
+        const relativeBottom = rect.bottom - containerRect.top;
+
+        // Check if page is visible
+        if (relativeBottom > 0 && relativeTop < containerHeight) {
+          const pageNum = parseInt(el.getAttribute("data-page-number") || "1");
+          visible.push(pageNum);
+
+          // Find the page closest to the top
+          const distance = Math.abs(relativeTop);
+          if (distance < minDistance) {
+            minDistance = distance;
+            currentPageNum = pageNum;
+          }
+        }
+      });
+
+      if (visible.length > 0) {
+        setVisiblePages(visible);
+        setCurrentPage(currentPageNum);
+      }
+    }, 100);
+  }, [pdfDocument, viewMode, setCurrentPage]);
+
+  // Scroll to page when currentPage changes (single page mode or navigation)
+  useEffect(() => {
+    if (!containerRef.current || !pdfDocument) return;
+
+    if (viewMode === "single") {
+      setVisiblePages([currentPage]);
+    }
+  }, [currentPage, viewMode, pdfDocument]);
+
+  // Set up scroll listener
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    container.addEventListener("scroll", handleScroll);
+    return () => {
+      container.removeEventListener("scroll", handleScroll);
+      if (scrollTimeoutRef.current) {
+        clearTimeout(scrollTimeoutRef.current);
+      }
+    };
+  }, [handleScroll]);
 
   if (!filePath) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center bg-gray-100 dark:bg-gray-900 text-gray-500 dark:text-gray-400">
         <FileText className="w-16 h-16 mb-4 opacity-50" />
         <p className="text-lg mb-2">No PDF loaded</p>
-        <p className="text-sm">
-          Click "Open" or press Ctrl+O to open a PDF file
-        </p>
+        <p className="text-sm">Click "Open" or press Ctrl+O to open a PDF file</p>
       </div>
     );
   }
 
+  if (!pdfDocument) {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center bg-gray-100 dark:bg-gray-900 text-gray-500 dark:text-gray-400">
+        <Loader2 className="w-12 h-12 mb-4 animate-spin" />
+        <p className="text-lg">Loading PDF...</p>
+      </div>
+    );
+  }
+
+  const pagesToRender =
+    viewMode === "continuous"
+      ? Array.from({ length: totalPages }, (_, i) => i + 1)
+      : [currentPage];
+
   return (
-    <div className="flex-1 overflow-auto bg-gray-200 dark:bg-gray-800">
-      <div className="p-4">
-        <div className="bg-white dark:bg-gray-700 rounded-lg shadow-lg p-8 max-w-2xl mx-auto">
-          <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-4">
-            PDF Loaded
-          </h2>
-          <dl className="space-y-2 text-sm">
-            <div className="flex">
-              <dt className="w-24 text-gray-500 dark:text-gray-400">File:</dt>
-              <dd className="text-gray-900 dark:text-gray-100">
-                {metadata?.fileName}
-              </dd>
-            </div>
-            <div className="flex">
-              <dt className="w-24 text-gray-500 dark:text-gray-400">Path:</dt>
-              <dd className="text-gray-900 dark:text-gray-100 break-all">
-                {metadata?.path}
-              </dd>
-            </div>
-            {metadata?.title && (
-              <div className="flex">
-                <dt className="w-24 text-gray-500 dark:text-gray-400">
-                  Title:
-                </dt>
-                <dd className="text-gray-900 dark:text-gray-100">
-                  {metadata.title}
-                </dd>
-              </div>
-            )}
-            {metadata?.author && (
-              <div className="flex">
-                <dt className="w-24 text-gray-500 dark:text-gray-400">
-                  Author:
-                </dt>
-                <dd className="text-gray-900 dark:text-gray-100">
-                  {metadata.author}
-                </dd>
-              </div>
-            )}
-            {metadata?.pageCount && (
-              <div className="flex">
-                <dt className="w-24 text-gray-500 dark:text-gray-400">
-                  Pages:
-                </dt>
-                <dd className="text-gray-900 dark:text-gray-100">
-                  {metadata.pageCount}
-                </dd>
-              </div>
-            )}
-          </dl>
-          <p className="mt-6 text-gray-500 dark:text-gray-400 text-sm italic">
-            PDF rendering with pdfjs-dist will be implemented in the next phase.
-          </p>
-        </div>
+    <div
+      ref={containerRef}
+      className="flex-1 overflow-auto bg-gray-200 dark:bg-gray-800"
+    >
+      <div className="flex flex-col items-center py-4 gap-4">
+        {pagesToRender.map((pageNum) => (
+          <PdfPage
+            key={pageNum}
+            pdfDocument={pdfDocument}
+            pageNumber={pageNum}
+            scale={zoomLevel}
+            rotation={rotation}
+            isVisible={visiblePages.includes(pageNum) || Math.abs(pageNum - currentPage) <= 2}
+          />
+        ))}
       </div>
     </div>
   );

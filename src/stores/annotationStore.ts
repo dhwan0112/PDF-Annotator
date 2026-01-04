@@ -42,6 +42,9 @@ interface AnnotationAction {
 const PRESET_COLORS = {
   pen: ["#000000", "#ef4444", "#3b82f6", "#22c55e", "#f59e0b"],
   highlighter: ["#fef08a", "#bbf7d0", "#bfdbfe", "#fbcfe8", "#fed7aa"],
+  underline: ["#ef4444", "#3b82f6", "#22c55e", "#f59e0b", "#8b5cf6"],
+  strikeout: ["#ef4444", "#000000", "#3b82f6", "#f59e0b", "#8b5cf6"],
+  note: ["#fef08a", "#fbcfe8", "#bfdbfe", "#bbf7d0", "#fed7aa"],
 };
 
 export const useAnnotationStore = create<AnnotationState>((set, get) => ({
@@ -57,10 +60,16 @@ export const useAnnotationStore = create<AnnotationState>((set, get) => ({
 
   // Actions
   setCurrentTool: (tool) => {
-    const color =
-      tool === "highlighter"
-        ? PRESET_COLORS.highlighter[0]
-        : PRESET_COLORS.pen[0];
+    let color = PRESET_COLORS.pen[0];
+    if (tool === "highlighter") {
+      color = PRESET_COLORS.highlighter[0];
+    } else if (tool === "underline") {
+      color = PRESET_COLORS.underline[0];
+    } else if (tool === "strikeout") {
+      color = PRESET_COLORS.strikeout[0];
+    } else if (tool === "note") {
+      color = PRESET_COLORS.note[0];
+    }
     set({ currentTool: tool, currentColor: color });
   },
 
