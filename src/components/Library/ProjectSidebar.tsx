@@ -161,7 +161,6 @@ export function ProjectSidebar({
                   </button>
                   {menuProjectId === project.id && (
                     <ProjectMenu
-                      project={project}
                       onEdit={() => {
                         setEditingProject(project);
                         setNewProjectName(project.name);
@@ -375,12 +374,10 @@ export function ProjectSidebar({
 }
 
 function ProjectMenu({
-  project,
   onEdit,
   onDelete,
   onClose,
 }: {
-  project: Project;
   onEdit: () => void;
   onDelete: () => void;
   onClose: () => void;

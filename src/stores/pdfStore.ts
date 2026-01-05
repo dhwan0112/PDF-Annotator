@@ -18,6 +18,7 @@ interface PdfState {
 
   // Actions
   setFile: (filePath: string, metadata: PdfMetadata) => void;
+  setFilePath: (filePath: string) => void;
   clearFile: () => void;
   setCurrentPage: (page: number) => void;
   setTotalPages: (total: number) => void;
@@ -57,6 +58,14 @@ export const usePdfStore = create<PdfState>((set, get) => ({
     set({
       filePath,
       metadata,
+      currentPage: 1,
+      scrollPosition: 0,
+      rotation: 0,
+    }),
+
+  setFilePath: (filePath) =>
+    set({
+      filePath,
       currentPage: 1,
       scrollPosition: 0,
       rotation: 0,
