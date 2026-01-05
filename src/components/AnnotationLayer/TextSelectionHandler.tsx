@@ -13,7 +13,8 @@ export function TextSelectionHandler({
   scale,
   containerRef,
 }: TextSelectionHandlerProps) {
-  const { currentTool, currentColor, addAnnotation } = useAnnotationStore();
+  const { currentTool, getCurrentColor, addAnnotation } = useAnnotationStore();
+  const currentColor = getCurrentColor();
   const isProcessingRef = useRef(false);
 
   const getRectsFromSelection = useCallback(

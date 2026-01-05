@@ -1,3 +1,4 @@
+import { useState, useRef } from "react";
 import { useAnnotationStore, usePdfStore, useUiStore } from "../../stores";
 import {
   MousePointer2,
@@ -25,9 +26,13 @@ import {
   Underline,
   Strikethrough,
   Library,
+  Settings2,
+  Keyboard,
 } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
 import type { AnnotationTool } from "../../types";
+import { ToolSettingsPopover } from "./ToolSettingsPopover";
+import { KeyboardShortcutsSettings } from "../Settings";
 
 const tools: { id: AnnotationTool; icon: typeof Pen; label: string }[] = [
   { id: "select", icon: MousePointer2, label: "Select (V)" },
@@ -42,7 +47,7 @@ const tools: { id: AnnotationTool; icon: typeof Pen; label: string }[] = [
 ];
 
 export function Toolbar() {
-  const { currentTool, setCurrentTool, undo, redo, undoStack, redoStack } =
+  const { currentTool, setCurrentTool, undo, redo, undoStack, redoStack, getToolSettings } =
     useAnnotationStore();
   const {
     zoomLevel,
@@ -58,6 +63,11 @@ export function Toolbar() {
     setViewMode,
   } = usePdfStore();
   const { theme, setTheme, currentView, setCurrentView } = useUiStore();
+
+  const [settingsPopoverTool, setSettingsPopoverTool] = useState<AnnotationTool | null>(null);
+  const [settingsAnchorEl, setSettingsAnchorEl] = useState<HTMLElement | null>(null);
+  const [showKeyboardSettings, setShowKeyboardSettings] = useState(false);
+  const toolButtonRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
 
   const handleOpenFile = async () => {
     try {
@@ -121,12 +131,24 @@ export function Toolbar() {
 
         <div className="flex-1" />
 
+        {/* Keyboard shortcuts settings */}
+        <ToolbarButton
+          icon={Keyboard}
+          label="Keyboard shortcuts"
+          onClick={() => setShowKeyboardSettings(true)}
+        />
+
         {/* Theme toggle */}
         <ToolbarButton
           icon={ThemeIcon}
           label={`Theme: ${theme}`}
           onClick={cycleTheme}
         />
+
+        {/* Keyboard shortcuts settings modal */}
+        {showKeyboardSettings && (
+          <KeyboardShortcutsSettings onClose={() => setShowKeyboardSettings(false)} />
+        )}
       </header>
     );
   }
@@ -150,16 +172,70 @@ export function Toolbar() {
 
       {/* Annotation tools */}
       <div className="flex items-center gap-1 px-2 border-r border-gray-300 dark:border-gray-600">
-        {tools.map(({ id, icon, label }) => (
-          <ToolbarButton
-            key={id}
-            icon={icon}
-            label={label}
-            active={currentTool === id}
-            onClick={() => setCurrentTool(id)}
-          />
-        ))}
+        {tools.map(({ id, icon: Icon, label }) => {
+          const settings = getToolSettings(id);
+          const showColorIndicator = id !== "select" && id !== "eraser";
+          return (
+            <div key={id} className="relative">
+              <button
+                ref={(el) => {
+                  if (el) toolButtonRefs.current.set(id, el);
+                }}
+                onClick={() => setCurrentTool(id)}
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  setSettingsPopoverTool(id);
+                  setSettingsAnchorEl(toolButtonRefs.current.get(id) || null);
+                }}
+                onDoubleClick={() => {
+                  setSettingsPopoverTool(id);
+                  setSettingsAnchorEl(toolButtonRefs.current.get(id) || null);
+                }}
+                className={`p-2 rounded transition-colors relative ${
+                  currentTool === id
+                    ? "bg-blue-500 text-white"
+                    : "text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700"
+                }`}
+                title={`${label} (Right-click for settings)`}
+              >
+                <Icon className="w-5 h-5" />
+                {/* Color indicator dot */}
+                {showColorIndicator && (
+                  <div
+                    className="absolute -bottom-0.5 left-1/2 -translate-x-1/2 w-2 h-2 rounded-full border border-gray-300 dark:border-gray-600"
+                    style={{ backgroundColor: settings.color }}
+                  />
+                )}
+              </button>
+            </div>
+          );
+        })}
+        {/* Settings button for current tool */}
+        {currentTool !== "select" && (
+          <button
+            onClick={() => {
+              setSettingsPopoverTool(currentTool);
+              setSettingsAnchorEl(toolButtonRefs.current.get(currentTool) || null);
+            }}
+            className="p-2 rounded text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+            title="Tool settings"
+          >
+            <Settings2 className="w-4 h-4" />
+          </button>
+        )}
       </div>
+
+      {/* Tool settings popover */}
+      {settingsPopoverTool && (
+        <ToolSettingsPopover
+          tool={settingsPopoverTool}
+          anchorEl={settingsAnchorEl}
+          onClose={() => {
+            setSettingsPopoverTool(null);
+            setSettingsAnchorEl(null);
+          }}
+        />
+      )}
 
       {/* Undo/Redo */}
       <div className="flex items-center gap-1 px-2 border-r border-gray-300 dark:border-gray-600">
@@ -226,12 +302,24 @@ export function Toolbar() {
 
       <div className="flex-1" />
 
+      {/* Keyboard shortcuts settings */}
+      <ToolbarButton
+        icon={Keyboard}
+        label="Keyboard shortcuts"
+        onClick={() => setShowKeyboardSettings(true)}
+      />
+
       {/* Theme toggle */}
       <ToolbarButton
         icon={ThemeIcon}
         label={`Theme: ${theme}`}
         onClick={cycleTheme}
       />
+
+      {/* Keyboard shortcuts settings modal */}
+      {showKeyboardSettings && (
+        <KeyboardShortcutsSettings onClose={() => setShowKeyboardSettings(false)} />
+      )}
     </header>
   );
 }

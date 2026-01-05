@@ -10,7 +10,8 @@ interface NoteCreatorProps {
 }
 
 export function NoteCreator({ pageNumber, scale, width, height }: NoteCreatorProps) {
-  const { currentTool, currentColor, addAnnotation } = useAnnotationStore();
+  const { currentTool, getCurrentColor, addAnnotation } = useAnnotationStore();
+  const currentColor = getCurrentColor();
 
   const handleClick = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {

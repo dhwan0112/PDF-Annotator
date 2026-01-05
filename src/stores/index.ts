@@ -1,6 +1,9 @@
 export { usePdfStore } from "./pdfStore";
-export { useAnnotationStore } from "./annotationStore";
+export { useAnnotationStore, TOOL_COLOR_PRESETS } from "./annotationStore";
+export type { ToolSettings } from "./annotationStore";
 export { useUiStore } from "./uiStore";
 export { useBookmarkStore } from "./bookmarkStore";
 export { useLibraryStore } from "./libraryStore";
 export type { Document, Project, Tag } from "./libraryStore";
+export { useSettingsStore } from "./settingsStore";
+export type { KeyBinding, ShortcutConfig } from "./settingsStore";

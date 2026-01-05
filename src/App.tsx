@@ -3,7 +3,7 @@ import { Toolbar } from "./components/Toolbar";
 import { Sidebar } from "./components/Sidebar";
 import { PdfViewer } from "./components/PdfViewer";
 import { Library } from "./components/Library";
-import { useUiStore, usePdfStore, useAnnotationStore, useLibraryStore } from "./stores";
+import { useUiStore, usePdfStore, useAnnotationStore, useLibraryStore, useSettingsStore } from "./stores";
 import { usePdfDocument, useAnnotationPersistence, useBookmarkPersistence } from "./hooks";
 
 function App() {
@@ -25,6 +25,7 @@ function App() {
     currentPage,
   } = usePdfStore();
   const { undo, redo, setCurrentTool } = useAnnotationStore();
+  const { findShortcutByEvent } = useSettingsStore();
 
   // Apply theme on mount and when it changes
   useEffect(() => {
@@ -101,7 +102,7 @@ function App() {
     setCurrentView("viewer");
   }, [setFilePath, setCurrentView]);
 
-  // Keyboard shortcuts
+  // Keyboard shortcuts (customizable via settings)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       // Ignore if typing in input/textarea
@@ -112,8 +113,18 @@ function App() {
         return;
       }
 
-      // Escape to go back to library
-      if (e.key === "Escape" && currentView === "viewer") {
+      // Find matching shortcut from settings
+      const shortcutId = findShortcutByEvent(e);
+
+      // File shortcuts (work in any view)
+      if (shortcutId === "file.open") {
+        e.preventDefault();
+        document.querySelector<HTMLButtonElement>('[title*="Open"]')?.click();
+        return;
+      }
+
+      if (shortcutId === "file.backToLibrary" && currentView === "viewer") {
+        e.preventDefault();
         setCurrentView("library");
         return;
       }
@@ -121,76 +132,65 @@ function App() {
       // Only process PDF shortcuts when in viewer
       if (currentView !== "viewer") return;
 
-      // Ctrl shortcuts
-      if (e.ctrlKey || e.metaKey) {
-        switch (e.key.toLowerCase()) {
-          case "o":
-            e.preventDefault();
-            document.querySelector<HTMLButtonElement>('[title*="Open"]')?.click();
+      if (shortcutId) {
+        e.preventDefault();
+
+        // Tool shortcuts
+        if (shortcutId.startsWith("tool.")) {
+          const tool = shortcutId.replace("tool.", "");
+          const toolMap: Record<string, Parameters<typeof setCurrentTool>[0]> = {
+            select: "select",
+            pen: "pen",
+            highlighter: "highlighter",
+            eraser: "eraser",
+            note: "note",
+            underline: "underline",
+            strikeout: "strikeout",
+            rect: "rect",
+            arrow: "arrow",
+          };
+          if (toolMap[tool]) {
+            setCurrentTool(toolMap[tool]);
+          }
+          return;
+        }
+
+        // Edit shortcuts
+        switch (shortcutId) {
+          case "edit.undo":
+            undo();
             break;
-          case "z":
-            e.preventDefault();
-            if (e.shiftKey) {
-              redo();
-            } else {
-              undo();
-            }
-            break;
-          case "y":
-            e.preventDefault();
+          case "edit.redo":
+          case "edit.redoAlt":
             redo();
             break;
-          case "=":
-          case "+":
-            e.preventDefault();
+        }
+
+        // View shortcuts
+        switch (shortcutId) {
+          case "view.zoomIn":
             zoomIn();
             break;
-          case "-":
-            e.preventDefault();
+          case "view.zoomOut":
             zoomOut();
             break;
         }
-        return;
-      }
 
-      // Non-modifier shortcuts
-      switch (e.key) {
-        case "PageDown":
-          e.preventDefault();
-          goToNextPage();
-          break;
-        case "PageUp":
-          e.preventDefault();
-          goToPreviousPage();
-          break;
-        case "Home":
-          e.preventDefault();
-          goToFirstPage();
-          break;
-        case "End":
-          e.preventDefault();
-          goToLastPage();
-          break;
-        case "v":
-        case "V":
-          setCurrentTool("select");
-          break;
-        case "p":
-        case "P":
-          setCurrentTool("pen");
-          break;
-        case "h":
-        case "H":
-          setCurrentTool("highlighter");
-          break;
-        case "e":
-        case "E":
-          setCurrentTool("eraser");
-          break;
-        case "n":
-        case "N":
-          setCurrentTool("note");
-          break;
+        // Navigation shortcuts
+        switch (shortcutId) {
+          case "nav.nextPage":
+            goToNextPage();
+            break;
+          case "nav.prevPage":
+            goToPreviousPage();
+            break;
+          case "nav.firstPage":
+            goToFirstPage();
+            break;
+          case "nav.lastPage":
+            goToLastPage();
+            break;
+        }
       }
     };
 
@@ -199,6 +199,7 @@ function App() {
   }, [
     currentView,
     setCurrentView,
+    findShortcutByEvent,
     undo,
     redo,
     zoomIn,
