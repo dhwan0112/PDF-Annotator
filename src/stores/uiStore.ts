@@ -2,7 +2,12 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import type { Theme } from "../types";
 
+export type AppView = "library" | "viewer";
+
 interface UiState {
+  // View
+  currentView: AppView;
+
   // Theme
   theme: Theme;
 
@@ -15,6 +20,7 @@ interface UiState {
   toolbarPosition: "top" | "left";
 
   // Actions
+  setCurrentView: (view: AppView) => void;
   setTheme: (theme: Theme) => void;
   toggleTheme: () => void;
   setSidebarVisible: (visible: boolean) => void;
@@ -30,6 +36,7 @@ export const useUiStore = create<UiState>()(
   persist(
     (set, get) => ({
       // Initial state
+      currentView: "library",
       theme: "system",
       sidebarVisible: true,
       sidebarWidth: 280,
@@ -37,6 +44,8 @@ export const useUiStore = create<UiState>()(
       toolbarPosition: "top",
 
       // Actions
+      setCurrentView: (view) => set({ currentView: view }),
+
       setTheme: (theme) => {
         set({ theme });
         applyTheme(theme);

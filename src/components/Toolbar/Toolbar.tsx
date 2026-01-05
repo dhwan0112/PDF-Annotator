@@ -7,6 +7,7 @@ import {
   StickyNote,
   Square,
   ArrowRight,
+  ArrowLeft,
   Undo2,
   Redo2,
   ZoomIn,
@@ -23,6 +24,7 @@ import {
   File,
   Underline,
   Strikethrough,
+  Library,
 } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
 import type { AnnotationTool } from "../../types";
@@ -54,8 +56,9 @@ export function Toolbar() {
     rotateCounterClockwise,
     viewMode,
     setViewMode,
+    setFilePath,
   } = usePdfStore();
-  const { theme, setTheme } = useUiStore();
+  const { theme, setTheme, currentView, setCurrentView } = useUiStore();
 
   const handleOpenFile = async () => {
     try {
@@ -75,10 +78,15 @@ export function Toolbar() {
           title: metadata.title,
           author: metadata.author,
         });
+        setCurrentView("viewer");
       }
     } catch (error) {
       console.error("Failed to open file:", error);
     }
+  };
+
+  const handleBackToLibrary = () => {
+    setCurrentView("library");
   };
 
   const cycleTheme = () => {
@@ -93,10 +101,47 @@ export function Toolbar() {
 
   const ThemeIcon = theme === "light" ? Sun : theme === "dark" ? Moon : Monitor;
 
+  // Library view toolbar
+  if (currentView === "library") {
+    return (
+      <header className="flex items-center gap-1 px-2 py-1.5 bg-gray-100 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+        {/* Logo/Title */}
+        <div className="flex items-center gap-2 px-2">
+          <Library className="w-5 h-5 text-blue-500" />
+          <span className="font-semibold text-gray-800 dark:text-gray-200">PDF Annotator</span>
+        </div>
+
+        {/* Open file */}
+        <div className="flex items-center gap-1 px-2 border-l border-gray-300 dark:border-gray-600">
+          <ToolbarButton
+            icon={FolderOpen}
+            label="Open file (Ctrl+O)"
+            onClick={handleOpenFile}
+          />
+        </div>
+
+        <div className="flex-1" />
+
+        {/* Theme toggle */}
+        <ToolbarButton
+          icon={ThemeIcon}
+          label={`Theme: ${theme}`}
+          onClick={cycleTheme}
+        />
+      </header>
+    );
+  }
+
+  // Viewer toolbar
   return (
     <header className="flex items-center gap-1 px-2 py-1.5 bg-gray-100 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 flex-wrap">
-      {/* File operations */}
+      {/* Back to library */}
       <div className="flex items-center gap-1 pr-2 border-r border-gray-300 dark:border-gray-600">
+        <ToolbarButton
+          icon={ArrowLeft}
+          label="Back to Library (Esc)"
+          onClick={handleBackToLibrary}
+        />
         <ToolbarButton
           icon={FolderOpen}
           label="Open file (Ctrl+O)"
