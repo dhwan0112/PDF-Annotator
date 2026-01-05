@@ -6,6 +6,7 @@ mod sync;
 use commands::{file, library};
 use std::sync::Mutex;
 
+#[allow(unused_variables)]
 fn log_error_to_file(message: &str) {
     #[cfg(target_os = "windows")]
     {
@@ -24,7 +25,7 @@ fn log_error_to_file(message: &str) {
     }
     #[cfg(not(target_os = "windows"))]
     {
-        eprintln!("{}", message);
+        let _ = message; // Avoid unused variable warning
     }
 }
 
