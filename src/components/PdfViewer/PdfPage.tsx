@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, memo } from "react";
 import type { PDFDocumentProxy, PDFPageProxy } from "pdfjs-dist";
 import { TextLayer } from "pdfjs-dist";
 import { AnnotationLayer, TextSelectionHandler } from "../AnnotationLayer";
+import { useSettingsStore } from "../../stores";
 
 interface PdfPageProps {
   pdfDocument: PDFDocumentProxy;
@@ -10,6 +11,9 @@ interface PdfPageProps {
   rotation: number;
   isVisible: boolean;
 }
+
+// Margin area dimensions (in pixels, before scaling)
+const MARGIN_WIDTH = 150; // Left and right margin for drawing
 
 export const PdfPage = memo(function PdfPage({
   pdfDocument,
@@ -126,45 +130,90 @@ export const PdfPage = memo(function PdfPage({
     };
   }, [page, scale, rotation, isVisible]);
 
+  // Calculate margin-extended dimensions
+  const { marginDrawingEnabled } = useSettingsStore();
+  const marginWidth = marginDrawingEnabled ? MARGIN_WIDTH * scale : 0;
+  const totalWidth = dimensions.width + marginWidth * 2;
+  const totalHeight = dimensions.height;
+
   return (
     <div
       data-page-number={pageNumber}
-      className="relative bg-white shadow-lg"
-      style={{ width: dimensions.width, height: dimensions.height }}
+      className="relative shadow-lg"
+      style={{ width: totalWidth, height: totalHeight }}
     >
-      {isVisible ? (
-        <>
-          {/* PDF Canvas */}
-          <canvas ref={canvasRef} className="absolute top-0 left-0" />
-
-          {/* Text Layer (for selection) */}
-          <div
-            ref={textLayerRef}
-            className="absolute top-0 left-0 text-layer"
-            style={{ width: dimensions.width, height: dimensions.height }}
-          />
-
-          {/* Text Selection Handler for highlight/underline/strikeout */}
-          <TextSelectionHandler
-            pageNumber={pageNumber}
-            scale={scale}
-            containerRef={textLayerRef}
-          />
-
-          {/* Annotation Layer */}
-          <AnnotationLayer
-            pageNumber={pageNumber}
-            width={dimensions.width}
-            height={dimensions.height}
-            scale={scale}
-          />
-        </>
-      ) : (
-        <div className="absolute inset-0 flex items-center justify-center bg-gray-100 dark:bg-gray-700">
-          <div className="w-8 h-8 border-2 border-gray-300 border-t-blue-500 rounded-full animate-spin" />
-        </div>
+      {/* Left margin area (drawable) */}
+      {marginDrawingEnabled && (
+        <div
+          className="absolute top-0 left-0 bg-gray-50 dark:bg-gray-850 border-r border-gray-200 dark:border-gray-700"
+          style={{ width: marginWidth, height: totalHeight }}
+        />
       )}
-      <div className="absolute bottom-2 right-2 bg-black/50 text-white text-xs px-2 py-1 rounded z-10">
+
+      {/* PDF page area */}
+      <div
+        className="absolute bg-white"
+        style={{
+          left: marginWidth,
+          top: 0,
+          width: dimensions.width,
+          height: dimensions.height,
+        }}
+      >
+        {isVisible ? (
+          <>
+            {/* PDF Canvas */}
+            <canvas ref={canvasRef} className="absolute top-0 left-0" />
+
+            {/* Text Layer (for selection) */}
+            <div
+              ref={textLayerRef}
+              className="absolute top-0 left-0 text-layer"
+              style={{ width: dimensions.width, height: dimensions.height }}
+            />
+
+            {/* Text Selection Handler for highlight/underline/strikeout */}
+            <TextSelectionHandler
+              pageNumber={pageNumber}
+              scale={scale}
+              containerRef={textLayerRef}
+            />
+          </>
+        ) : (
+          <div className="absolute inset-0 flex items-center justify-center bg-gray-100 dark:bg-gray-700">
+            <div className="w-8 h-8 border-2 border-gray-300 border-t-blue-500 rounded-full animate-spin" />
+          </div>
+        )}
+      </div>
+
+      {/* Right margin area (drawable) */}
+      {marginDrawingEnabled && (
+        <div
+          className="absolute top-0 bg-gray-50 dark:bg-gray-850 border-l border-gray-200 dark:border-gray-700"
+          style={{
+            left: marginWidth + dimensions.width,
+            width: marginWidth,
+            height: totalHeight,
+          }}
+        />
+      )}
+
+      {/* Full-width Annotation Layer (covers PDF + margins) */}
+      {isVisible && (
+        <AnnotationLayer
+          pageNumber={pageNumber}
+          width={totalWidth}
+          height={totalHeight}
+          scale={scale}
+          marginOffset={marginWidth}
+        />
+      )}
+
+      {/* Page number indicator */}
+      <div
+        className="absolute bottom-2 bg-black/50 text-white text-xs px-2 py-1 rounded z-10"
+        style={{ right: marginDrawingEnabled ? marginWidth + 8 : 8 }}
+      >
         {pageNumber}
       </div>
     </div>

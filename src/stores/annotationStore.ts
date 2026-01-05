@@ -9,12 +9,18 @@ export interface ToolSettings {
   thickness: number;
 }
 
+// Drawing tools that can be used with pen tablet
+const DRAWING_TOOLS: AnnotationTool[] = ["pen", "highlighter", "eraser", "underline", "strikeout"];
+
 interface AnnotationState {
   // Annotations indexed by page number
   annotations: Map<number, Annotation[]>;
 
   // Current tool
   currentTool: AnnotationTool;
+
+  // Last used drawing tool (for pen tablet auto-switch)
+  lastDrawingTool: AnnotationTool;
 
   // Per-tool settings
   toolSettings: Record<string, ToolSettings>;
@@ -28,6 +34,7 @@ interface AnnotationState {
 
   // Actions
   setCurrentTool: (tool: AnnotationTool) => void;
+  switchToPenTool: () => void; // For pen tablet detection
   getToolSettings: (tool: AnnotationTool) => ToolSettings;
   setToolColor: (tool: AnnotationTool, color: string) => void;
   setToolOpacity: (tool: AnnotationTool, opacity: number) => void;
@@ -85,13 +92,30 @@ export const useAnnotationStore = create<AnnotationState>()(
       // Initial state
       annotations: new Map(),
       currentTool: "select",
+      lastDrawingTool: "pen",
       toolSettings: { ...DEFAULT_TOOL_SETTINGS },
       selectedAnnotationId: null,
       undoStack: [],
       redoStack: [],
 
       // Actions
-      setCurrentTool: (tool) => set({ currentTool: tool }),
+      setCurrentTool: (tool) => {
+        // Track last drawing tool for pen tablet auto-switch
+        if (DRAWING_TOOLS.includes(tool)) {
+          set({ currentTool: tool, lastDrawingTool: tool });
+        } else {
+          set({ currentTool: tool });
+        }
+      },
+
+      // Switch to last used drawing tool (for pen tablet)
+      switchToPenTool: () => {
+        const { lastDrawingTool, currentTool } = get();
+        // Only switch if not already using a drawing tool
+        if (!DRAWING_TOOLS.includes(currentTool)) {
+          set({ currentTool: lastDrawingTool });
+        }
+      },
 
       getToolSettings: (tool) => {
         const { toolSettings } = get();
@@ -320,7 +344,10 @@ export const useAnnotationStore = create<AnnotationState>()(
     }),
     {
       name: "pdf-annotator-tools",
-      partialize: (state) => ({ toolSettings: state.toolSettings }),
+      partialize: (state) => ({
+        toolSettings: state.toolSettings,
+        lastDrawingTool: state.lastDrawingTool,
+      }),
     }
   )
 );

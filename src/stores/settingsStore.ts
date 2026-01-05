@@ -47,11 +47,18 @@ const DEFAULT_SHORTCUTS: Record<string, ShortcutConfig> = {
   // File
   "file.open": { id: "file.open", label: "Open File", category: "File", binding: { key: "o", ctrl: true } },
   "file.backToLibrary": { id: "file.backToLibrary", label: "Back to Library", category: "File", binding: { key: "Escape" } },
+
+  // Features
+  "feature.toggleMargin": { id: "feature.toggleMargin", label: "Toggle Margin Drawing", category: "Features", binding: { key: "m", ctrl: true } },
+  "feature.toggleMindMap": { id: "feature.toggleMindMap", label: "Toggle Mind Map Panel", category: "Features", binding: { key: "m", ctrl: true, shift: true } },
 };
 
 interface SettingsState {
   // Keyboard shortcuts
   shortcuts: Record<string, ShortcutConfig>;
+
+  // Feature settings
+  marginDrawingEnabled: boolean;
 
   // Actions
   getShortcut: (id: string) => ShortcutConfig | undefined;
@@ -62,12 +69,23 @@ interface SettingsState {
   findShortcutByEvent: (event: KeyboardEvent) => string | null;
   getShortcutsByCategory: () => Record<string, ShortcutConfig[]>;
   formatShortcut: (binding: KeyBinding) => string;
+  toggleMarginDrawing: () => void;
+  setMarginDrawing: (enabled: boolean) => void;
 }
 
 export const useSettingsStore = create<SettingsState>()(
   persist(
     (set, get) => ({
       shortcuts: { ...DEFAULT_SHORTCUTS },
+      marginDrawingEnabled: false,
+
+      toggleMarginDrawing: () => {
+        set((state) => ({ marginDrawingEnabled: !state.marginDrawingEnabled }));
+      },
+
+      setMarginDrawing: (enabled) => {
+        set({ marginDrawingEnabled: enabled });
+      },
 
       getShortcut: (id) => {
         return get().shortcuts[id];

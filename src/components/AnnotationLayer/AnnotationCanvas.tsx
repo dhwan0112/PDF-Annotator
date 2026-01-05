@@ -8,6 +8,7 @@ interface AnnotationCanvasProps {
   width: number;
   height: number;
   scale: number;
+  marginOffset?: number; // Offset from left where PDF content starts
 }
 
 interface StrokePoint {
@@ -21,6 +22,7 @@ export function AnnotationCanvas({
   width,
   height,
   scale,
+  marginOffset = 0,
 }: AnnotationCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const { currentTool, getCurrentColor, getStrokeWidth, addAnnotation, getAnnotationsForPage } =
@@ -37,15 +39,16 @@ export function AnnotationCanvas({
     (a): a is InkAnnotation => a.type === "ink"
   );
 
-  // Convert screen coordinates to PDF coordinates
+  // Convert screen coordinates to PDF coordinates (accounting for margin offset)
+  // x coordinates: negative = left margin, 0 to pdfWidth = PDF area, > pdfWidth = right margin
   const screenToPdf = useCallback(
     (x: number, y: number): Point => {
       return {
-        x: x / scale,
+        x: (x - marginOffset) / scale,
         y: y / scale,
       };
     },
-    [scale]
+    [scale, marginOffset]
   );
 
   // Convert points to SVG path using perfect-freehand
@@ -66,7 +69,7 @@ export function AnnotationCanvas({
     return d.join(" ");
   };
 
-  // Draw stroke on canvas
+  // Draw stroke on canvas (accounting for margin offset)
   const drawStroke = useCallback(
     (
       ctx: CanvasRenderingContext2D,
@@ -76,8 +79,9 @@ export function AnnotationCanvas({
     ) => {
       if (points.length < 2) return;
 
+      // Convert PDF coordinates back to canvas coordinates (add marginOffset)
       const strokePoints = getStroke(
-        points.map((p) => [p.x * scale, p.y * scale, p.pressure]),
+        points.map((p) => [p.x * scale + marginOffset, p.y * scale, p.pressure]),
         {
           size: strokeW * scale,
           thinning: 0.5,
@@ -90,7 +94,7 @@ export function AnnotationCanvas({
       ctx.fillStyle = color;
       ctx.fill(path);
     },
-    [scale]
+    [scale, marginOffset]
   );
 
   // Render all annotations
