@@ -2,11 +2,12 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import type { Theme } from "../types";
 
-export type AppView = "library" | "viewer";
+export type AppView = "library" | "viewer" | "mindmap";
 
 interface UiState {
   // View
   currentView: AppView;
+  activeMindMapId: string | null;
 
   // Theme
   theme: Theme;
@@ -16,11 +17,16 @@ interface UiState {
   sidebarWidth: number;
   activePanel: "thumbnails" | "bookmarks" | "annotations" | "outline";
 
+  // Margin Notes
+  marginNotesVisible: boolean;
+
   // Toolbar
   toolbarPosition: "top" | "left";
 
   // Actions
   setCurrentView: (view: AppView) => void;
+  setActiveMindMapId: (id: string | null) => void;
+  openMindMap: (id: string) => void;
   setTheme: (theme: Theme) => void;
   toggleTheme: () => void;
   setSidebarVisible: (visible: boolean) => void;
@@ -30,6 +36,8 @@ interface UiState {
     panel: "thumbnails" | "bookmarks" | "annotations" | "outline"
   ) => void;
   setToolbarPosition: (position: "top" | "left") => void;
+  toggleMarginNotes: () => void;
+  setMarginNotesVisible: (visible: boolean) => void;
 }
 
 export const useUiStore = create<UiState>()(
@@ -37,14 +45,20 @@ export const useUiStore = create<UiState>()(
     (set, get) => ({
       // Initial state
       currentView: "library",
+      activeMindMapId: null,
       theme: "system",
       sidebarVisible: true,
       sidebarWidth: 280,
       activePanel: "thumbnails",
+      marginNotesVisible: true,
       toolbarPosition: "top",
 
       // Actions
       setCurrentView: (view) => set({ currentView: view }),
+
+      setActiveMindMapId: (id) => set({ activeMindMapId: id }),
+
+      openMindMap: (id) => set({ currentView: "mindmap", activeMindMapId: id }),
 
       setTheme: (theme) => {
         set({ theme });
@@ -74,6 +88,13 @@ export const useUiStore = create<UiState>()(
       setActivePanel: (panel) => set({ activePanel: panel }),
 
       setToolbarPosition: (position) => set({ toolbarPosition: position }),
+
+      toggleMarginNotes: () => {
+        const { marginNotesVisible } = get();
+        set({ marginNotesVisible: !marginNotesVisible });
+      },
+
+      setMarginNotesVisible: (visible) => set({ marginNotesVisible: visible }),
     }),
     {
       name: "pdf-annotator-ui",

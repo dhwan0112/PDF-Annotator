@@ -1,0 +1,1 @@
+export { MarginNotesPanel } from "./MarginNotesPanel";

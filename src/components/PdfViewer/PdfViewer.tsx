@@ -9,7 +9,7 @@ interface PdfViewerProps {
 }
 
 export function PdfViewer({ pdfDocument }: PdfViewerProps) {
-  const { filePath, zoomLevel, rotation, viewMode, currentPage, setCurrentPage, totalPages, setZoomLevel } =
+  const { filePath, zoomLevel, rotation, viewMode, currentPage, setCurrentPage, totalPages, adjustZoom } =
     usePdfStore();
   const containerRef = useRef<HTMLDivElement>(null);
   const [visiblePages, setVisiblePages] = useState<number[]>([1]);
@@ -20,12 +20,11 @@ export function PdfViewer({ pdfDocument }: PdfViewerProps) {
     if (e.ctrlKey || e.metaKey) {
       e.preventDefault();
 
-      // Calculate zoom factor based on scroll direction
+      // Calculate zoom delta based on scroll direction
       const delta = e.deltaY > 0 ? -0.1 : 0.1;
-      const newZoom = Math.max(0.25, Math.min(4.0, zoomLevel + delta));
-      setZoomLevel(newZoom);
+      adjustZoom(delta);
     }
-  }, [zoomLevel, setZoomLevel]);
+  }, [adjustZoom]);
 
   // Set up wheel listener for Ctrl+Scroll zoom
   useEffect(() => {
