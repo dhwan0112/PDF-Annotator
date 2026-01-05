@@ -169,13 +169,13 @@ export function StudyGroupSidebar({ onOpenDocument, onOpenMindMap }: StudyGroupS
           const mindMaps = getMindMapsForGroup(group.id);
           const groupDocs = group.documentIds
             .map((id) => getDocumentById(id))
-            .filter(Boolean);
+            .filter((doc): doc is NonNullable<typeof doc> => doc != null);
 
           return (
             <div key={group.id} className="border-b border-gray-100 dark:border-gray-700">
               {/* Group header */}
               <div
-                className={`flex items-center px-3 py-2 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-750 ${
+                className={`flex items-center px-3 py-2 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-750 group ${
                   isActive ? "bg-blue-50 dark:bg-blue-900/20" : ""
                 }`}
                 onClick={() => {
@@ -256,18 +256,18 @@ export function StudyGroupSidebar({ onOpenDocument, onOpenMindMap }: StudyGroupS
                   {/* Documents in group */}
                   {groupDocs.map((doc) => (
                     <div
-                      key={doc!.id}
+                      key={doc.id}
                       className="flex items-center px-8 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer group"
-                      onClick={() => onOpenDocument?.(doc!.file_path)}
+                      onClick={() => onOpenDocument?.(doc.file_path)}
                     >
                       <FileText className="w-3 h-3 mr-2 text-gray-400" />
                       <span className="flex-1 text-xs text-gray-600 dark:text-gray-400 truncate">
-                        {doc!.title || doc!.file_name}
+                        {doc.title || doc.file_name}
                       </span>
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          removeDocumentFromGroup(group.id, doc!.id);
+                          removeDocumentFromGroup(group.id, doc.id);
                         }}
                         className="p-0.5 hover:bg-red-100 dark:hover:bg-red-900/30 rounded opacity-0 group-hover:opacity-100"
                       >

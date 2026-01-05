@@ -335,7 +335,7 @@ export function MindMapCanvas({ mindMapId, onClose }: MindMapCanvasProps) {
           {mindMap.nodes.map((node) => (
             <div
               key={node.id}
-              className={`absolute rounded-lg shadow-md border-2 overflow-hidden cursor-move select-none ${
+              className={`absolute rounded-lg shadow-md border-2 overflow-hidden cursor-move select-none group ${
                 selectedNodeId === node.id
                   ? "border-blue-500 ring-2 ring-blue-300"
                   : "border-gray-200 dark:border-gray-600"
