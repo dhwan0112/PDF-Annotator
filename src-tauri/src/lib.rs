@@ -6,9 +6,33 @@ mod sync;
 use commands::{file, library};
 use std::sync::Mutex;
 
+fn log_error_to_file(message: &str) {
+    #[cfg(target_os = "windows")]
+    {
+        if let Some(home) = std::env::var_os("USERPROFILE") {
+            let log_path = std::path::PathBuf::from(home).join("pdf-annotator-crash.log");
+            if let Ok(mut file) = std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(&log_path)
+            {
+                use std::io::Write;
+                let timestamp = chrono::Local::now().format("%Y-%m-%d %H:%M:%S");
+                let _ = writeln!(file, "[{}] {}", timestamp, message);
+            }
+        }
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        eprintln!("{}", message);
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    log_error_to_file("Application starting...");
+
+    let result = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_shell::init())
@@ -44,6 +68,10 @@ pub fn run() {
             library::get_document_tags,
             library::get_documents_by_tag,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .run(tauri::generate_context!());
+
+    if let Err(e) = result {
+        log_error_to_file(&format!("Tauri error: {}", e));
+        panic!("error while running tauri application: {}", e);
+    }
 }
