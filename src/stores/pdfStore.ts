@@ -23,6 +23,7 @@ interface PdfState {
   setCurrentPage: (page: number) => void;
   setTotalPages: (total: number) => void;
   setZoomLevel: (zoom: number) => void;
+  adjustZoom: (delta: number) => void;
   zoomIn: () => void;
   zoomOut: () => void;
   fitToWidth: () => void;
@@ -93,6 +94,12 @@ export const usePdfStore = create<PdfState>((set, get) => ({
   setZoomLevel: (zoom) => {
     const clampedZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, zoom));
     set({ zoomLevel: clampedZoom });
+  },
+
+  adjustZoom: (delta) => {
+    const { zoomLevel } = get();
+    const newZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, zoomLevel + delta));
+    set({ zoomLevel: newZoom });
   },
 
   zoomIn: () => {

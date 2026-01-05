@@ -3,18 +3,21 @@ import { Toolbar } from "./components/Toolbar";
 import { Sidebar } from "./components/Sidebar";
 import { PdfViewer } from "./components/PdfViewer";
 import { Library } from "./components/Library";
+import { MarginNotesPanel } from "./components/MarginNotes";
+import { MindMapCanvas } from "./components/MindMap";
 import { useUiStore, usePdfStore, useAnnotationStore, useLibraryStore, useSettingsStore } from "./stores";
-import { usePdfDocument, useAnnotationPersistence, useBookmarkPersistence } from "./hooks";
+import { usePdfDocument, useAnnotationPersistence, useBookmarkPersistence, useAutoSave } from "./hooks";
 
 function App() {
-  const { theme, currentView, setCurrentView } = useUiStore();
+  const { theme, currentView, setCurrentView, marginNotesVisible, activeMindMapId, setActiveMindMapId } = useUiStore();
   const { pdfDocument } = usePdfDocument();
-  const { filePath, setFilePath } = usePdfStore();
+  const { filePath, setFilePath, currentPage } = usePdfStore();
   const { addDocument, updateDocumentProgress } = useLibraryStore();
 
   // Auto-save and load annotations and bookmarks
   useAnnotationPersistence();
   useBookmarkPersistence();
+  useAutoSave({ interval: 30000 }); // Periodic backup every 30 seconds
   const {
     zoomIn,
     zoomOut,
@@ -22,7 +25,6 @@ function App() {
     goToPreviousPage,
     goToFirstPage,
     goToLastPage,
-    currentPage,
   } = usePdfStore();
   const { undo, redo, setCurrentTool } = useAnnotationStore();
   const { findShortcutByEvent } = useSettingsStore();
@@ -211,17 +213,42 @@ function App() {
     setCurrentTool,
   ]);
 
+  // Handle opening mind map
+  const handleOpenMindMap = useCallback((mindMapId: string) => {
+    setActiveMindMapId(mindMapId);
+    setCurrentView("mindmap");
+  }, [setActiveMindMapId, setCurrentView]);
+
+  // Handle closing mind map
+  const handleCloseMindMap = useCallback(() => {
+    setActiveMindMapId(null);
+    setCurrentView("library");
+  }, [setActiveMindMapId, setCurrentView]);
+
+  // Get document ID from library for margin notes
+  const documentId = filePath ?
+    useLibraryStore.getState().documents.find(d => d.file_path === filePath)?.id || filePath
+    : "";
+
   return (
     <div className="flex flex-col h-screen bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100">
       <Toolbar />
       <div className="flex flex-1 overflow-hidden">
         {currentView === "library" ? (
-          <Library onOpenDocument={handleOpenDocument} />
+          <Library onOpenDocument={handleOpenDocument} onOpenMindMap={handleOpenMindMap} />
+        ) : currentView === "mindmap" && activeMindMapId ? (
+          <MindMapCanvas mindMapId={activeMindMapId} onClose={handleCloseMindMap} />
         ) : (
           <>
             <Sidebar pdfDocument={pdfDocument} />
-            <main className="flex-1 flex flex-col overflow-hidden">
+            <main className="flex-1 flex overflow-hidden">
               <PdfViewer pdfDocument={pdfDocument} />
+              {marginNotesVisible && filePath && (
+                <MarginNotesPanel
+                  documentId={documentId}
+                  pageNumber={currentPage}
+                />
+              )}
             </main>
           </>
         )}

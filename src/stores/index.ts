@@ -7,3 +7,5 @@ export { useLibraryStore } from "./libraryStore";
 export type { Document, Project, Tag } from "./libraryStore";
 export { useSettingsStore } from "./settingsStore";
 export type { KeyBinding, ShortcutConfig } from "./settingsStore";
+export { useStudyGroupStore } from "./studyGroupStore";
+export { useMindMapStore } from "./mindMapStore";
