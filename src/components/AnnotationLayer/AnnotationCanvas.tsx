@@ -23,8 +23,10 @@ export function AnnotationCanvas({
   scale,
 }: AnnotationCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const { currentTool, currentColor, strokeWidth, addAnnotation, getAnnotationsForPage } =
+  const { currentTool, getCurrentColor, getStrokeWidth, addAnnotation, getAnnotationsForPage } =
     useAnnotationStore();
+  const currentColor = getCurrentColor();
+  const strokeWidth = getStrokeWidth();
 
   const isDrawingRef = useRef(false);
   const currentStrokeRef = useRef<StrokePoint[]>([]);
