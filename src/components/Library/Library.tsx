@@ -3,11 +3,10 @@ import {
   Search,
   Grid,
   List,
-  SortAsc,
   FileText,
   RefreshCw,
 } from "lucide-react";
-import { useLibraryStore, usePdfStore } from "../../stores";
+import { useLibraryStore } from "../../stores";
 import { DocumentCard } from "./DocumentCard";
 import { ProjectSidebar } from "./ProjectSidebar";
 
