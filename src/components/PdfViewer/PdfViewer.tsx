@@ -9,11 +9,35 @@ interface PdfViewerProps {
 }
 
 export function PdfViewer({ pdfDocument }: PdfViewerProps) {
-  const { filePath, zoomLevel, rotation, viewMode, currentPage, setCurrentPage, totalPages } =
+  const { filePath, zoomLevel, rotation, viewMode, currentPage, setCurrentPage, totalPages, setZoomLevel } =
     usePdfStore();
   const containerRef = useRef<HTMLDivElement>(null);
   const [visiblePages, setVisiblePages] = useState<number[]>([1]);
   const scrollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Handle Ctrl+Scroll zoom
+  const handleWheel = useCallback((e: WheelEvent) => {
+    if (e.ctrlKey || e.metaKey) {
+      e.preventDefault();
+
+      // Calculate zoom factor based on scroll direction
+      const delta = e.deltaY > 0 ? -0.1 : 0.1;
+      const newZoom = Math.max(0.25, Math.min(4.0, zoomLevel + delta));
+      setZoomLevel(newZoom);
+    }
+  }, [zoomLevel, setZoomLevel]);
+
+  // Set up wheel listener for Ctrl+Scroll zoom
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    // Use passive: false to allow preventDefault
+    container.addEventListener("wheel", handleWheel, { passive: false });
+    return () => {
+      container.removeEventListener("wheel", handleWheel);
+    };
+  }, [handleWheel]);
 
   // Handle scroll to update current page and visible pages
   const handleScroll = useCallback(() => {
