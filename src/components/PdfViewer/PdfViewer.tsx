@@ -15,28 +15,41 @@ export function PdfViewer({ pdfDocument }: PdfViewerProps) {
   const [visiblePages, setVisiblePages] = useState<number[]>([1]);
   const scrollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Handle Ctrl+Scroll zoom
-  const handleWheel = useCallback((e: WheelEvent) => {
-    if (e.ctrlKey || e.metaKey) {
+  // Handle Ctrl+Scroll zoom - attach to document for reliable capture
+  useEffect(() => {
+    const handleWheel = (e: WheelEvent) => {
+      // Only handle if Ctrl/Meta is pressed
+      if (!(e.ctrlKey || e.metaKey)) return;
+
+      // Check if the event target is within our container
+      const container = containerRef.current;
+      if (!container) return;
+
+      // Check if event is within the PDF viewer area
+      const rect = container.getBoundingClientRect();
+      if (
+        e.clientX < rect.left ||
+        e.clientX > rect.right ||
+        e.clientY < rect.top ||
+        e.clientY > rect.bottom
+      ) {
+        return;
+      }
+
       e.preventDefault();
+      e.stopPropagation();
 
       // Calculate zoom delta based on scroll direction
       const delta = e.deltaY > 0 ? -0.1 : 0.1;
       adjustZoom(delta);
-    }
-  }, [adjustZoom]);
-
-  // Set up wheel listener for Ctrl+Scroll zoom
-  useEffect(() => {
-    const container = containerRef.current;
-    if (!container) return;
-
-    // Use passive: false to allow preventDefault
-    container.addEventListener("wheel", handleWheel, { passive: false });
-    return () => {
-      container.removeEventListener("wheel", handleWheel);
     };
-  }, [handleWheel]);
+
+    // Attach to document to capture before browser zoom
+    document.addEventListener("wheel", handleWheel, { passive: false, capture: true });
+    return () => {
+      document.removeEventListener("wheel", handleWheel, { capture: true });
+    };
+  }, [adjustZoom]);
 
   // Handle scroll to update current page and visible pages
   const handleScroll = useCallback(() => {

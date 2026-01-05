@@ -20,6 +20,10 @@ interface UiState {
   // Margin Notes
   marginNotesVisible: boolean;
 
+  // Mind Map Split Panel
+  mindMapPanelVisible: boolean;
+  mindMapPanelWidth: number;
+
   // Toolbar
   toolbarPosition: "top" | "left";
 
@@ -38,6 +42,9 @@ interface UiState {
   setToolbarPosition: (position: "top" | "left") => void;
   toggleMarginNotes: () => void;
   setMarginNotesVisible: (visible: boolean) => void;
+  toggleMindMapPanel: () => void;
+  setMindMapPanelVisible: (visible: boolean) => void;
+  setMindMapPanelWidth: (width: number) => void;
 }
 
 export const useUiStore = create<UiState>()(
@@ -51,6 +58,8 @@ export const useUiStore = create<UiState>()(
       sidebarWidth: 280,
       activePanel: "thumbnails",
       marginNotesVisible: true,
+      mindMapPanelVisible: false,
+      mindMapPanelWidth: 400,
       toolbarPosition: "top",
 
       // Actions
@@ -95,6 +104,18 @@ export const useUiStore = create<UiState>()(
       },
 
       setMarginNotesVisible: (visible) => set({ marginNotesVisible: visible }),
+
+      toggleMindMapPanel: () => {
+        const { mindMapPanelVisible } = get();
+        set({ mindMapPanelVisible: !mindMapPanelVisible });
+      },
+
+      setMindMapPanelVisible: (visible) => set({ mindMapPanelVisible: visible }),
+
+      setMindMapPanelWidth: (width) => {
+        const clampedWidth = Math.max(300, Math.min(800, width));
+        set({ mindMapPanelWidth: clampedWidth });
+      },
     }),
     {
       name: "pdf-annotator-ui",

@@ -7,9 +7,10 @@ interface NoteCreatorProps {
   scale: number;
   width: number;
   height: number;
+  marginOffset?: number;
 }
 
-export function NoteCreator({ pageNumber, scale, width, height }: NoteCreatorProps) {
+export function NoteCreator({ pageNumber, scale, width, height, marginOffset = 0 }: NoteCreatorProps) {
   const { currentTool, getCurrentColor, addAnnotation } = useAnnotationStore();
   const currentColor = getCurrentColor();
 
@@ -18,7 +19,8 @@ export function NoteCreator({ pageNumber, scale, width, height }: NoteCreatorPro
       if (currentTool !== "note") return;
 
       const rect = e.currentTarget.getBoundingClientRect();
-      const x = (e.clientX - rect.left) / scale;
+      // Account for margin offset - coordinates relative to PDF origin
+      const x = (e.clientX - rect.left - marginOffset) / scale;
       const y = (e.clientY - rect.top) / scale;
 
       const annotation: NoteAnnotation = {
@@ -34,7 +36,7 @@ export function NoteCreator({ pageNumber, scale, width, height }: NoteCreatorPro
 
       addAnnotation(annotation);
     },
-    [currentTool, currentColor, pageNumber, scale, addAnnotation]
+    [currentTool, currentColor, pageNumber, scale, marginOffset, addAnnotation]
   );
 
   if (currentTool !== "note") {

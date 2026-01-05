@@ -5,11 +5,11 @@ import { PdfViewer } from "./components/PdfViewer";
 import { Library } from "./components/Library";
 import { MarginNotesPanel } from "./components/MarginNotes";
 import { MindMapCanvas } from "./components/MindMap";
-import { useUiStore, usePdfStore, useAnnotationStore, useLibraryStore, useSettingsStore } from "./stores";
-import { usePdfDocument, useAnnotationPersistence, useBookmarkPersistence, useAutoSave } from "./hooks";
+import { useUiStore, usePdfStore, useAnnotationStore, useLibraryStore, useSettingsStore, useStudyGroupStore, useMindMapStore } from "./stores";
+import { usePdfDocument, useAnnotationPersistence, useBookmarkPersistence, useAutoSave, usePenTablet } from "./hooks";
 
 function App() {
-  const { theme, currentView, setCurrentView, marginNotesVisible, activeMindMapId, setActiveMindMapId } = useUiStore();
+  const { theme, currentView, setCurrentView, marginNotesVisible, activeMindMapId, setActiveMindMapId, mindMapPanelVisible, toggleMindMapPanel, mindMapPanelWidth } = useUiStore();
   const { pdfDocument } = usePdfDocument();
   const { filePath, setFilePath, currentPage } = usePdfStore();
   const { addDocument, updateDocumentProgress } = useLibraryStore();
@@ -18,6 +18,7 @@ function App() {
   useAnnotationPersistence();
   useBookmarkPersistence();
   useAutoSave({ interval: 30000 }); // Periodic backup every 30 seconds
+  usePenTablet(); // Auto-switch to pen tool when stylus detected
   const {
     zoomIn,
     zoomOut,
@@ -27,7 +28,7 @@ function App() {
     goToLastPage,
   } = usePdfStore();
   const { undo, redo, setCurrentTool } = useAnnotationStore();
-  const { findShortcutByEvent } = useSettingsStore();
+  const { findShortcutByEvent, toggleMarginDrawing } = useSettingsStore();
 
   // Apply theme on mount and when it changes
   useEffect(() => {
@@ -193,6 +194,16 @@ function App() {
             goToLastPage();
             break;
         }
+
+        // Feature shortcuts
+        switch (shortcutId) {
+          case "feature.toggleMargin":
+            toggleMarginDrawing();
+            break;
+          case "feature.toggleMindMap":
+            toggleMindMapPanel();
+            break;
+        }
       }
     };
 
@@ -211,6 +222,8 @@ function App() {
     goToFirstPage,
     goToLastPage,
     setCurrentTool,
+    toggleMarginDrawing,
+    toggleMindMapPanel,
   ]);
 
   // Handle opening mind map
@@ -229,6 +242,13 @@ function App() {
   const documentId = filePath ?
     useLibraryStore.getState().documents.find(d => d.file_path === filePath)?.id || filePath
     : "";
+
+  // Get active study group's first mind map for split panel view
+  const { activeStudyGroupId } = useStudyGroupStore();
+  const { getMindMapsForGroup } = useMindMapStore();
+  const splitPanelMindMapId = activeStudyGroupId
+    ? getMindMapsForGroup(activeStudyGroupId)[0]?.id || null
+    : activeMindMapId;
 
   return (
     <div className="flex flex-col h-screen bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100">
@@ -250,6 +270,18 @@ function App() {
                 />
               )}
             </main>
+            {/* Mind Map Split Panel */}
+            {mindMapPanelVisible && splitPanelMindMapId && (
+              <div
+                className="border-l border-gray-200 dark:border-gray-700 flex-shrink-0"
+                style={{ width: mindMapPanelWidth }}
+              >
+                <MindMapCanvas
+                  mindMapId={splitPanelMindMapId}
+                  onClose={toggleMindMapPanel}
+                />
+              </div>
+            )}
           </>
         )}
       </div>
