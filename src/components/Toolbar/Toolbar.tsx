@@ -56,7 +56,6 @@ export function Toolbar() {
     rotateCounterClockwise,
     viewMode,
     setViewMode,
-    setFilePath,
   } = usePdfStore();
   const { theme, setTheme, currentView, setCurrentView } = useUiStore();
 
