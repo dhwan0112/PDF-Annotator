@@ -1,20 +1,27 @@
-import { useRef, useEffect, useCallback } from "react";
+import { useRef, useEffect, useCallback, useState } from "react";
 import { getStroke } from "perfect-freehand";
 import { useAnnotationStore } from "../../stores";
-import type { InkAnnotation, Point, Stroke } from "../../types";
+import type { InkAnnotation, HighlighterInkAnnotation, RectAnnotation, Point, Stroke, Rect } from "../../types";
 
 interface AnnotationCanvasProps {
   pageNumber: number;
   width: number;
   height: number;
   scale: number;
-  marginOffset?: number; // Offset from left where PDF content starts
+  marginOffset?: number;
 }
 
 interface StrokePoint {
   x: number;
   y: number;
   pressure: number;
+}
+
+interface RectPreview {
+  startX: number;
+  startY: number;
+  endX: number;
+  endY: number;
 }
 
 export function AnnotationCanvas({
@@ -25,22 +32,29 @@ export function AnnotationCanvas({
   marginOffset = 0,
 }: AnnotationCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const { currentTool, getCurrentColor, getStrokeWidth, addAnnotation, getAnnotationsForPage } =
+  const { currentTool, getCurrentColor, getStrokeWidth, getHighlightOpacity, addAnnotation, getAnnotationsForPage } =
     useAnnotationStore();
   const currentColor = getCurrentColor();
   const strokeWidth = getStrokeWidth();
+  const highlightOpacity = getHighlightOpacity();
 
   const isDrawingRef = useRef(false);
   const currentStrokeRef = useRef<StrokePoint[]>([]);
+  const [rectPreview, setRectPreview] = useState<RectPreview | null>(null);
 
   // Get annotations for this page
   const annotations = getAnnotationsForPage(pageNumber);
   const inkAnnotations = annotations.filter(
     (a): a is InkAnnotation => a.type === "ink"
   );
+  const highlighterInkAnnotations = annotations.filter(
+    (a): a is HighlighterInkAnnotation => a.type === "highlighterInk"
+  );
+  const rectAnnotations = annotations.filter(
+    (a): a is RectAnnotation => a.type === "rect"
+  );
 
-  // Convert screen coordinates to PDF coordinates (accounting for margin offset)
-  // x coordinates: negative = left margin, 0 to pdfWidth = PDF area, > pdfWidth = right margin
+  // Convert screen coordinates to PDF coordinates
   const screenToPdf = useCallback(
     (x: number, y: number): Point => {
       return {
@@ -69,17 +83,17 @@ export function AnnotationCanvas({
     return d.join(" ");
   };
 
-  // Draw stroke on canvas (accounting for margin offset)
+  // Draw stroke on canvas
   const drawStroke = useCallback(
     (
       ctx: CanvasRenderingContext2D,
       points: StrokePoint[],
       color: string,
-      strokeW: number
+      strokeW: number,
+      opacity: number = 1
     ) => {
       if (points.length < 2) return;
 
-      // Convert PDF coordinates back to canvas coordinates (add marginOffset)
       const strokePoints = getStroke(
         points.map((p) => [p.x * scale + marginOffset, p.y * scale, p.pressure]),
         {
@@ -91,8 +105,47 @@ export function AnnotationCanvas({
       );
 
       const path = new Path2D(getSvgPathFromStroke(strokePoints) + " Z");
+      ctx.save();
+      ctx.globalAlpha = opacity;
       ctx.fillStyle = color;
       ctx.fill(path);
+      ctx.restore();
+    },
+    [scale, marginOffset]
+  );
+
+  // Draw rectangle on canvas
+  const drawRect = useCallback(
+    (
+      ctx: CanvasRenderingContext2D,
+      rect: Rect,
+      color: string,
+      opacity: number = 0.3,
+      strokeOnly: boolean = false
+    ) => {
+      const x = rect.x * scale + marginOffset;
+      const y = rect.y * scale;
+      const w = rect.width * scale;
+      const h = rect.height * scale;
+
+      ctx.save();
+      ctx.globalAlpha = opacity;
+
+      if (strokeOnly) {
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 2;
+        ctx.setLineDash([5, 5]);
+        ctx.strokeRect(x, y, w, h);
+      } else {
+        ctx.fillStyle = color;
+        ctx.fillRect(x, y, w, h);
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 2;
+        ctx.globalAlpha = 1;
+        ctx.strokeRect(x, y, w, h);
+      }
+
+      ctx.restore();
     },
     [scale, marginOffset]
   );
@@ -122,11 +175,28 @@ export function AnnotationCanvas({
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    // Clear canvas (account for DPI scaling)
+    // Clear canvas
     ctx.save();
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.restore();
+
+    // Draw existing rect annotations
+    rectAnnotations.forEach((annotation) => {
+      drawRect(ctx, annotation.rect, annotation.color, 0.3);
+    });
+
+    // Draw existing highlighter ink annotations (below regular ink)
+    highlighterInkAnnotations.forEach((annotation) => {
+      annotation.strokes.forEach((stroke) => {
+        const points: StrokePoint[] = stroke.points.map((p, i) => ({
+          x: p.x,
+          y: p.y,
+          pressure: stroke.pressure[i] ?? 0.5,
+        }));
+        drawStroke(ctx, points, stroke.color, stroke.width, annotation.opacity);
+      });
+    });
 
     // Draw existing ink annotations
     inkAnnotations.forEach((annotation) => {
@@ -136,15 +206,27 @@ export function AnnotationCanvas({
           y: p.y,
           pressure: stroke.pressure[i] ?? 0.5,
         }));
-        drawStroke(ctx, points, stroke.color, stroke.width);
+        drawStroke(ctx, points, stroke.color, stroke.width, 1);
       });
     });
 
-    // Draw current stroke
+    // Draw current stroke (pen or highlighter)
     if (currentStrokeRef.current.length > 0) {
-      drawStroke(ctx, currentStrokeRef.current, currentColor, strokeWidth);
+      const opacity = currentTool === "highlighter" ? highlightOpacity : 1;
+      drawStroke(ctx, currentStrokeRef.current, currentColor, strokeWidth, opacity);
     }
-  }, [inkAnnotations, currentColor, strokeWidth, drawStroke]);
+
+    // Draw rect preview
+    if (rectPreview) {
+      const rect: Rect = {
+        x: Math.min(rectPreview.startX, rectPreview.endX),
+        y: Math.min(rectPreview.startY, rectPreview.endY),
+        width: Math.abs(rectPreview.endX - rectPreview.startX),
+        height: Math.abs(rectPreview.endY - rectPreview.startY),
+      };
+      drawRect(ctx, rect, currentColor, 0.3, true);
+    }
+  }, [inkAnnotations, highlighterInkAnnotations, rectAnnotations, currentTool, currentColor, strokeWidth, highlightOpacity, drawStroke, drawRect, rectPreview]);
 
   // Re-render when annotations change
   useEffect(() => {
@@ -154,26 +236,36 @@ export function AnnotationCanvas({
   // Handle pointer events
   const handlePointerDown = useCallback(
     (e: React.PointerEvent) => {
-      if (currentTool !== "pen" && currentTool !== "eraser") return;
+      const drawingTools = ["pen", "highlighter", "eraser", "rect"];
+      if (!drawingTools.includes(currentTool)) return;
 
       e.preventDefault();
       e.currentTarget.setPointerCapture(e.pointerId);
 
-      const rect = canvasRef.current?.getBoundingClientRect();
-      if (!rect) return;
+      const canvasRect = canvasRef.current?.getBoundingClientRect();
+      if (!canvasRect) return;
 
-      const x = e.clientX - rect.left;
-      const y = e.clientY - rect.top;
+      const x = e.clientX - canvasRect.left;
+      const y = e.clientY - canvasRect.top;
       const pdfPoint = screenToPdf(x, y);
 
-      const point: StrokePoint = {
-        x: pdfPoint.x,
-        y: pdfPoint.y,
-        pressure: e.pressure || 0.5,
-      };
-
       isDrawingRef.current = true;
-      currentStrokeRef.current = [point];
+
+      if (currentTool === "rect") {
+        setRectPreview({
+          startX: pdfPoint.x,
+          startY: pdfPoint.y,
+          endX: pdfPoint.x,
+          endY: pdfPoint.y,
+        });
+      } else {
+        const point: StrokePoint = {
+          x: pdfPoint.x,
+          y: pdfPoint.y,
+          pressure: e.pressure || 0.5,
+        };
+        currentStrokeRef.current = [point];
+      }
     },
     [currentTool, screenToPdf]
   );
@@ -182,23 +274,28 @@ export function AnnotationCanvas({
     (e: React.PointerEvent) => {
       if (!isDrawingRef.current) return;
 
-      const rect = canvasRef.current?.getBoundingClientRect();
-      if (!rect) return;
+      const canvasRect = canvasRef.current?.getBoundingClientRect();
+      if (!canvasRect) return;
 
-      const x = e.clientX - rect.left;
-      const y = e.clientY - rect.top;
+      const x = e.clientX - canvasRect.left;
+      const y = e.clientY - canvasRect.top;
       const pdfPoint = screenToPdf(x, y);
 
-      const point: StrokePoint = {
-        x: pdfPoint.x,
-        y: pdfPoint.y,
-        pressure: e.pressure || 0.5,
-      };
-
-      currentStrokeRef.current = [...currentStrokeRef.current, point];
-      renderAnnotations();
+      if (currentTool === "rect") {
+        setRectPreview((prev) =>
+          prev ? { ...prev, endX: pdfPoint.x, endY: pdfPoint.y } : null
+        );
+      } else {
+        const point: StrokePoint = {
+          x: pdfPoint.x,
+          y: pdfPoint.y,
+          pressure: e.pressure || 0.5,
+        };
+        currentStrokeRef.current = [...currentStrokeRef.current, point];
+        renderAnnotations();
+      }
     },
-    [screenToPdf, renderAnnotations]
+    [currentTool, screenToPdf, renderAnnotations]
   );
 
   const handlePointerUp = useCallback(
@@ -208,13 +305,29 @@ export function AnnotationCanvas({
       e.currentTarget.releasePointerCapture(e.pointerId);
       isDrawingRef.current = false;
 
-      if (currentStrokeRef.current.length < 2) {
-        currentStrokeRef.current = [];
-        return;
-      }
+      if (currentTool === "rect" && rectPreview) {
+        // Create rect annotation
+        const rectData: Rect = {
+          x: Math.min(rectPreview.startX, rectPreview.endX),
+          y: Math.min(rectPreview.startY, rectPreview.endY),
+          width: Math.abs(rectPreview.endX - rectPreview.startX),
+          height: Math.abs(rectPreview.endY - rectPreview.startY),
+        };
 
-      if (currentTool === "pen") {
-        // Create new ink annotation
+        if (rectData.width > 5 / scale && rectData.height > 5 / scale) {
+          const annotation: RectAnnotation = {
+            id: crypto.randomUUID(),
+            type: "rect",
+            pageNumber,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+            color: currentColor,
+            rect: rectData,
+          };
+          addAnnotation(annotation);
+        }
+        setRectPreview(null);
+      } else if (currentStrokeRef.current.length >= 2) {
         const stroke: Stroke = {
           points: currentStrokeRef.current.map((p) => ({ x: p.x, y: p.y })),
           pressure: currentStrokeRef.current.map((p) => p.pressure),
@@ -222,32 +335,46 @@ export function AnnotationCanvas({
           width: strokeWidth,
         };
 
-        const annotation: InkAnnotation = {
-          id: crypto.randomUUID(),
-          type: "ink",
-          pageNumber,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-          color: currentColor,
-          strokes: [stroke],
-        };
-
-        addAnnotation(annotation);
+        if (currentTool === "pen") {
+          const annotation: InkAnnotation = {
+            id: crypto.randomUUID(),
+            type: "ink",
+            pageNumber,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+            color: currentColor,
+            strokes: [stroke],
+          };
+          addAnnotation(annotation);
+        } else if (currentTool === "highlighter") {
+          const annotation: HighlighterInkAnnotation = {
+            id: crypto.randomUUID(),
+            type: "highlighterInk",
+            pageNumber,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+            color: currentColor,
+            strokes: [stroke],
+            opacity: highlightOpacity,
+          };
+          addAnnotation(annotation);
+        }
       }
 
       currentStrokeRef.current = [];
       renderAnnotations();
     },
-    [currentTool, currentColor, strokeWidth, pageNumber, addAnnotation, renderAnnotations]
+    [currentTool, currentColor, strokeWidth, highlightOpacity, pageNumber, addAnnotation, renderAnnotations, rectPreview, scale]
   );
 
   const handlePointerCancel = useCallback(() => {
     isDrawingRef.current = false;
     currentStrokeRef.current = [];
+    setRectPreview(null);
     renderAnnotations();
   }, [renderAnnotations]);
 
-  const isInteractive = currentTool === "pen" || currentTool === "eraser";
+  const isInteractive = ["pen", "highlighter", "eraser", "rect"].includes(currentTool);
 
   return (
     <canvas
