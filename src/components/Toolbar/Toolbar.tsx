@@ -1,5 +1,5 @@
 import { useState, useRef } from "react";
-import { useAnnotationStore, usePdfStore, useUiStore } from "../../stores";
+import { useAnnotationStore, usePdfStore, useUiStore, useTabStore } from "../../stores";
 import {
   MousePointer2,
   Pen,
@@ -14,6 +14,7 @@ import {
   ZoomIn,
   ZoomOut,
   FolderOpen,
+  Save,
   Moon,
   Sun,
   Monitor,
@@ -30,9 +31,12 @@ import {
   Keyboard,
 } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
+import { save } from "@tauri-apps/plugin-dialog";
+import { readFile, writeFile } from "@tauri-apps/plugin-fs";
 import type { AnnotationTool } from "../../types";
 import { ToolSettingsPopover } from "./ToolSettingsPopover";
 import { KeyboardShortcutsSettings } from "../Settings";
+import { exportAnnotationsToPdf } from "../../utils";
 
 const tools: { id: AnnotationTool; icon: typeof Pen; label: string }[] = [
   { id: "select", icon: MousePointer2, label: "Select (V)" },
@@ -50,6 +54,7 @@ export function Toolbar() {
   const { currentTool, setCurrentTool, undo, redo, undoStack, redoStack, getToolSettings } =
     useAnnotationStore();
   const {
+    filePath,
     zoomLevel,
     zoomIn,
     zoomOut,
@@ -63,10 +68,12 @@ export function Toolbar() {
     setViewMode,
   } = usePdfStore();
   const { theme, setTheme, currentView, setCurrentView } = useUiStore();
+  const { openTab } = useTabStore();
 
   const [settingsPopoverTool, setSettingsPopoverTool] = useState<AnnotationTool | null>(null);
   const [settingsAnchorEl, setSettingsAnchorEl] = useState<HTMLElement | null>(null);
   const [showKeyboardSettings, setShowKeyboardSettings] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const toolButtonRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
 
   const handleOpenFile = async () => {
@@ -80,6 +87,14 @@ export function Toolbar() {
           title: string | null;
           author: string | null;
         }>("read_pdf_metadata", { filePath });
+        // Open in a new tab (or switch to existing)
+        openTab(filePath, {
+          path: metadata.path,
+          fileName: metadata.file_name,
+          pageCount: metadata.page_count,
+          title: metadata.title,
+          author: metadata.author,
+        });
         usePdfStore.getState().setFile(filePath, {
           path: metadata.path,
           fileName: metadata.file_name,
@@ -91,6 +106,58 @@ export function Toolbar() {
       }
     } catch (error) {
       console.error("Failed to open file:", error);
+    }
+  };
+
+  const handleSaveWithAnnotations = async () => {
+    if (!filePath || isSaving) return;
+
+    try {
+      setIsSaving(true);
+
+      // Get all annotations from the store
+      const annotations = useAnnotationStore.getState().annotations;
+      const allAnnotations: import("../../types").Annotation[] = [];
+      annotations.forEach((pageAnnotations) => {
+        allAnnotations.push(...pageAnnotations);
+      });
+
+      if (allAnnotations.length === 0) {
+        console.log("No annotations to save");
+        setIsSaving(false);
+        return;
+      }
+
+      // Read the original PDF file
+      const pdfBytes = await readFile(filePath);
+
+      // Create page heights map (simplified - assumes all pages are same height)
+      const pageHeights = new Map<number, number>();
+      for (let i = 1; i <= totalPages; i++) {
+        pageHeights.set(i, 792); // Default letter size height
+      }
+
+      // Export annotations to PDF
+      const modifiedPdf = await exportAnnotationsToPdf(
+        pdfBytes.buffer,
+        allAnnotations,
+        pageHeights
+      );
+
+      // Ask user where to save
+      const savePath = await save({
+        defaultPath: filePath.replace(".pdf", "_annotated.pdf"),
+        filters: [{ name: "PDF", extensions: ["pdf"] }],
+      });
+
+      if (savePath) {
+        await writeFile(savePath, modifiedPdf);
+        console.log("PDF saved with annotations:", savePath);
+      }
+    } catch (error) {
+      console.error("Failed to save PDF with annotations:", error);
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -167,6 +234,12 @@ export function Toolbar() {
           icon={FolderOpen}
           label="Open file (Ctrl+O)"
           onClick={handleOpenFile}
+        />
+        <ToolbarButton
+          icon={Save}
+          label="Save PDF with annotations (Ctrl+S)"
+          onClick={handleSaveWithAnnotations}
+          disabled={!filePath || isSaving}
         />
       </div>
 

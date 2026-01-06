@@ -1,17 +1,18 @@
 import { useEffect, useCallback } from "react";
-import { Toolbar } from "./components/Toolbar";
+import { Toolbar, TabBar } from "./components/Toolbar";
 import { Sidebar } from "./components/Sidebar";
 import { PdfViewer } from "./components/PdfViewer";
 import { Library } from "./components/Library";
 import { MindMapCanvas } from "./components/MindMap";
-import { useUiStore, usePdfStore, useAnnotationStore, useLibraryStore, useSettingsStore, useStudyGroupStore, useMindMapStore } from "./stores";
+import { useUiStore, usePdfStore, useAnnotationStore, useLibraryStore, useSettingsStore, useStudyGroupStore, useMindMapStore, useTabStore } from "./stores";
 import { usePdfDocument, useAnnotationPersistence, useBookmarkPersistence, useAutoSave, usePenTablet, useSessionRestore } from "./hooks";
 
 function App() {
   const { theme, currentView, setCurrentView, activeMindMapId, setActiveMindMapId, mindMapPanelVisible, toggleMindMapPanel, mindMapPanelWidth } = useUiStore();
   const { pdfDocument } = usePdfDocument();
-  const { filePath, setFilePath, currentPage } = usePdfStore();
+  const { filePath, setFilePath, currentPage, setCurrentPage, setZoomLevel, setViewMode } = usePdfStore();
   const { addDocument, updateDocumentProgress } = useLibraryStore();
+  const { tabs, activeTabId, openTab, updateTab, getActiveTab } = useTabStore();
 
   // Auto-save and load annotations and bookmarks
   useAnnotationPersistence();
@@ -99,11 +100,45 @@ function App() {
     return () => clearTimeout(timeout);
   }, [filePath, currentPage, pdfDocument, updateDocumentProgress]);
 
-  // Handle opening document from library
+  // Handle opening document from library (with tabs support)
   const handleOpenDocument = useCallback((documentPath: string) => {
+    // Open in a new tab (or switch to existing tab)
+    openTab(documentPath, null);
     setFilePath(documentPath);
     setCurrentView("viewer");
-  }, [setFilePath, setCurrentView]);
+  }, [openTab, setFilePath, setCurrentView]);
+
+  // Sync pdfStore with active tab state
+  useEffect(() => {
+    const activeTab = getActiveTab();
+    if (activeTab && activeTab.filePath !== filePath) {
+      setFilePath(activeTab.filePath);
+      setCurrentPage(activeTab.currentPage);
+      setZoomLevel(activeTab.zoomLevel);
+      setViewMode(activeTab.viewMode);
+    }
+  }, [activeTabId, getActiveTab, filePath, setFilePath, setCurrentPage, setZoomLevel, setViewMode]);
+
+  // Save current state back to active tab when it changes
+  useEffect(() => {
+    if (activeTabId && filePath) {
+      const { zoomLevel, viewMode, rotation } = usePdfStore.getState();
+      updateTab(activeTabId, {
+        currentPage,
+        zoomLevel,
+        viewMode,
+        rotation,
+      });
+    }
+  }, [activeTabId, filePath, currentPage, updateTab]);
+
+  // Handle tab change
+  const handleTabChange = useCallback((tab: { filePath: string; currentPage: number; zoomLevel: number; viewMode: "single" | "continuous" }) => {
+    setFilePath(tab.filePath);
+    setCurrentPage(tab.currentPage);
+    setZoomLevel(tab.zoomLevel);
+    setViewMode(tab.viewMode);
+  }, [setFilePath, setCurrentPage, setZoomLevel, setViewMode]);
 
   // Keyboard shortcuts (customizable via settings)
   useEffect(() => {
@@ -245,6 +280,10 @@ function App() {
   return (
     <div className="flex flex-col h-screen bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100">
       <Toolbar />
+      {/* Tab bar - only show in viewer mode with open tabs */}
+      {currentView === "viewer" && tabs.length > 0 && (
+        <TabBar onTabChange={handleTabChange} />
+      )}
       <div className="flex flex-1 overflow-hidden">
         {currentView === "library" ? (
           <Library onOpenDocument={handleOpenDocument} onOpenMindMap={handleOpenMindMap} />

@@ -9,3 +9,5 @@ export { useSettingsStore } from "./settingsStore";
 export type { KeyBinding, ShortcutConfig } from "./settingsStore";
 export { useStudyGroupStore } from "./studyGroupStore";
 export { useMindMapStore } from "./mindMapStore";
+export { useTabStore } from "./tabStore";
+export type { TabState } from "./tabStore";
