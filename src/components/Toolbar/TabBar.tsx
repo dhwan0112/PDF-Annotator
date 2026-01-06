@@ -33,6 +33,10 @@ export function TabBar({ onTabChange }: TabBarProps) {
   const [editingName, setEditingName] = useState("");
   const editInputRef = useRef<HTMLInputElement>(null);
 
+  // Drag and drop state
+  const [draggingTabId, setDraggingTabId] = useState<string | null>(null);
+  const [dropTarget, setDropTarget] = useState<string | null>(null); // groupId or "ungrouped"
+
   // Close context menu when clicking outside
   useEffect(() => {
     const handleClickOutside = () => setContextMenu(null);
@@ -138,6 +142,69 @@ export function TabBar({ onTabChange }: TabBarProps) {
     updateStudyGroup(groupId, { color });
   };
 
+  // Drag and drop handlers
+  const handleDragStart = (e: React.DragEvent, tabId: string) => {
+    setDraggingTabId(tabId);
+    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData("text/plain", tabId);
+    // Make the drag image slightly transparent
+    if (e.currentTarget instanceof HTMLElement) {
+      e.currentTarget.style.opacity = "0.5";
+    }
+  };
+
+  const handleDragEnd = (e: React.DragEvent) => {
+    setDraggingTabId(null);
+    setDropTarget(null);
+    if (e.currentTarget instanceof HTMLElement) {
+      e.currentTarget.style.opacity = "1";
+    }
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+  };
+
+  const handleDropOnGroup = (e: React.DragEvent, groupId: string) => {
+    e.preventDefault();
+    if (!draggingTabId) return;
+
+    const tab = tabs.find((t) => t.id === draggingTabId);
+    if (!tab || tab.groupId === groupId) return;
+
+    // Remove from old group if needed
+    if (tab.documentId && tab.groupId) {
+      removeDocumentFromGroup(tab.groupId, tab.documentId);
+    }
+
+    // Add to new group
+    if (tab.documentId) {
+      addDocumentToGroup(groupId, tab.documentId);
+    }
+
+    moveTabToGroup(draggingTabId, groupId);
+    setDraggingTabId(null);
+    setDropTarget(null);
+  };
+
+  const handleDropOnUngrouped = (e: React.DragEvent) => {
+    e.preventDefault();
+    if (!draggingTabId) return;
+
+    const tab = tabs.find((t) => t.id === draggingTabId);
+    if (!tab || !tab.groupId) return;
+
+    // Remove from group
+    if (tab.documentId && tab.groupId) {
+      removeDocumentFromGroup(tab.groupId, tab.documentId);
+    }
+
+    moveTabToGroup(draggingTabId, null);
+    setDraggingTabId(null);
+    setDropTarget(null);
+  };
+
   // Organize tabs by group
   const ungroupedTabs = tabs.filter((t) => !t.groupId);
   const groupedTabs = new Map<string, TabState[]>();
@@ -147,6 +214,7 @@ export function TabBar({ onTabChange }: TabBarProps) {
 
   const renderTab = (tab: TabState, group?: StudyGroup) => {
     const isActive = tab.id === activeTabId;
+    const isDragging = tab.id === draggingTabId;
     const fileName = tab.filePath.split(/[\\/]/).pop() || "Untitled";
     const displayName = fileName.length > 20 ? fileName.substring(0, 17) + "..." : fileName;
     const groupColor = group?.color;
@@ -159,14 +227,17 @@ export function TabBar({ onTabChange }: TabBarProps) {
     return (
       <div
         key={tab.id}
+        draggable
+        onDragStart={(e) => handleDragStart(e, tab.id)}
+        onDragEnd={handleDragEnd}
         onClick={() => handleTabClick(tab)}
         onMouseDown={(e) => handleMiddleClick(e, tab.id)}
         onContextMenu={(e) => handleContextMenu(e, tab.id)}
-        className={`group flex items-center gap-1.5 px-2.5 py-1.5 cursor-pointer min-w-0 max-w-[180px] transition-colors ${
+        className={`group flex items-center gap-1.5 px-2.5 py-1.5 cursor-grab min-w-0 max-w-[180px] transition-colors ${
           isActive
             ? "bg-gray-100 dark:bg-gray-800 rounded-t-lg border-t border-l border-r border-gray-300 dark:border-gray-600 -mb-px"
             : "hover:bg-gray-300 dark:hover:bg-gray-700 rounded-t-md mt-1 mx-0.5 border border-transparent"
-        } ${!isActive && !groupColor ? "bg-gray-300/50 dark:bg-gray-800/50" : ""}`}
+        } ${!isActive && !groupColor ? "bg-gray-300/50 dark:bg-gray-800/50" : ""} ${isDragging ? "opacity-50" : ""}`}
         style={isActive ? borderStyle : bgStyle}
         title={tab.filePath}
       >
@@ -195,8 +266,9 @@ export function TabBar({ onTabChange }: TabBarProps) {
 
   const renderGroupHeader = (group: StudyGroup) => {
     const tabsInGroup = groupedTabs.get(group.id) || [];
+    const isDropTarget = dropTarget === group.id;
 
-    if (tabsInGroup.length === 0) return null;
+    if (tabsInGroup.length === 0 && !draggingTabId) return null;
 
     const groupColor = group.color;
     const bgStyle = { backgroundColor: `${groupColor}20` };
@@ -204,10 +276,24 @@ export function TabBar({ onTabChange }: TabBarProps) {
     const textStyle = { color: groupColor };
 
     return (
-      <div key={`group-${group.id}`} className="flex items-center">
+      <div
+        key={`group-${group.id}`}
+        className="flex items-center"
+        onDragOver={handleDragOver}
+        onDragEnter={() => setDropTarget(group.id)}
+        onDragLeave={(e) => {
+          // Only clear if leaving the group entirely
+          if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+            setDropTarget(null);
+          }
+        }}
+        onDrop={(e) => handleDropOnGroup(e, group.id)}
+      >
         {/* Group header */}
         <div
-          className="flex items-center gap-1 px-2 py-1 rounded-t-md mt-1 cursor-pointer border-b-2"
+          className={`flex items-center gap-1 px-2 py-1 rounded-t-md mt-1 cursor-pointer border-b-2 transition-all ${
+            isDropTarget ? "ring-2 ring-blue-500 ring-offset-1" : ""
+          }`}
           style={{ ...bgStyle, ...borderStyle }}
           onClick={() => toggleGroupCollapsed(group.id)}
         >
@@ -291,11 +377,22 @@ export function TabBar({ onTabChange }: TabBarProps) {
       {/* Grouped tabs */}
       {studyGroups.map((group) => renderGroupHeader(group))}
 
-      {/* Ungrouped tabs */}
-      {ungroupedTabs.map((tab) => renderTab(tab))}
-
-      {/* Empty space filler - matches tab bar background */}
-      <div className="flex-1 min-h-[36px]" />
+      {/* Ungrouped tabs - also a drop zone */}
+      <div
+        className={`flex items-center flex-1 min-h-[36px] transition-all ${
+          dropTarget === "ungrouped" ? "bg-blue-100 dark:bg-blue-900/30" : ""
+        }`}
+        onDragOver={handleDragOver}
+        onDragEnter={() => setDropTarget("ungrouped")}
+        onDragLeave={(e) => {
+          if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+            setDropTarget(null);
+          }
+        }}
+        onDrop={handleDropOnUngrouped}
+      >
+        {ungroupedTabs.map((tab) => renderTab(tab))}
+      </div>
 
       {/* Context menu */}
       {contextMenu && (
