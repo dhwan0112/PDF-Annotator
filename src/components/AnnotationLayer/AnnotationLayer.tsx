@@ -2,6 +2,7 @@ import { AnnotationCanvas } from "./AnnotationCanvas";
 import { HighlightLayer } from "./HighlightLayer";
 import { NoteLayer } from "./NoteLayer";
 import { NoteCreator } from "./NoteCreator";
+import { TextBoxLayer } from "./TextBoxLayer";
 
 interface AnnotationLayerProps {
   pageNumber: number;
@@ -50,6 +51,15 @@ export function AnnotationLayer({
       <div style={{ position: "absolute", left: marginOffset, top: 0, width: width - marginOffset * 2, height }}>
         <NoteLayer pageNumber={pageNumber} scale={scale} />
       </div>
+
+      {/* TextBox layer (above notes) */}
+      <TextBoxLayer
+        pageNumber={pageNumber}
+        scale={scale}
+        width={width}
+        height={height}
+        marginOffset={marginOffset}
+      />
     </div>
   );
 }

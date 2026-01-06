@@ -72,6 +72,7 @@ const DEFAULT_TOOL_SETTINGS: Record<string, ToolSettings> = {
   rect: { color: "#3b82f6", opacity: 0.3, thickness: 2 },
   arrow: { color: "#000000", opacity: 1, thickness: 2 },
   select: { color: "#3b82f6", opacity: 1, thickness: 1 },
+  text: { color: "#000000", opacity: 1, thickness: 14 }, // thickness = font size
 };
 
 // Preset colors for each tool type
@@ -84,6 +85,7 @@ export const TOOL_COLOR_PRESETS: Record<string, string[]> = {
   note: ["#fef08a", "#fbcfe8", "#bfdbfe", "#bbf7d0", "#fed7aa", "#e9d5ff"],
   rect: ["#3b82f6", "#ef4444", "#22c55e", "#f59e0b", "#8b5cf6", "#000000"],
   arrow: ["#000000", "#ef4444", "#3b82f6", "#22c55e", "#f59e0b"],
+  text: ["#000000", "#ef4444", "#3b82f6", "#22c55e", "#f59e0b", "#8b5cf6"],
 };
 
 export const useAnnotationStore = create<AnnotationState>()(

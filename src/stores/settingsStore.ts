@@ -28,6 +28,7 @@ const DEFAULT_SHORTCUTS: Record<string, ShortcutConfig> = {
   "tool.strikeout": { id: "tool.strikeout", label: "Strikeout", category: "Tools", binding: { key: "s" } },
   "tool.rect": { id: "tool.rect", label: "Rectangle", category: "Tools", binding: { key: "r" } },
   "tool.arrow": { id: "tool.arrow", label: "Arrow", category: "Tools", binding: { key: "a" } },
+  "tool.text": { id: "tool.text", label: "Text Box", category: "Tools", binding: { key: "t" } },
 
   // Edit
   "edit.undo": { id: "edit.undo", label: "Undo", category: "Edit", binding: { key: "z", ctrl: true } },

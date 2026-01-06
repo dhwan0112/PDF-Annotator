@@ -72,6 +72,26 @@ export interface ArrowAnnotation extends BaseAnnotation {
   strokeWidth: number;
 }
 
+export interface TextStyle {
+  fontFamily: string;
+  fontSize: number;
+  fontColor: string;
+  bold: boolean;
+  italic: boolean;
+  underline: boolean;
+}
+
+export interface TextBoxAnnotation extends BaseAnnotation {
+  type: "textbox";
+  position: Point;
+  width: number;
+  height: number;
+  content: string;
+  style: TextStyle;
+  backgroundColor?: string;
+  borderColor?: string;
+}
+
 export type Annotation =
   | InkAnnotation
   | HighlighterInkAnnotation
@@ -80,7 +100,8 @@ export type Annotation =
   | StrikeoutAnnotation
   | NoteAnnotation
   | RectAnnotation
-  | ArrowAnnotation;
+  | ArrowAnnotation
+  | TextBoxAnnotation;
 
 export type AnnotationTool =
   | "select"
@@ -91,4 +112,5 @@ export type AnnotationTool =
   | "eraser"
   | "note"
   | "rect"
-  | "arrow";
+  | "arrow"
+  | "text";
