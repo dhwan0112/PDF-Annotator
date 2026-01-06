@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { useAnnotationStore, TOOL_COLOR_PRESETS } from "../../stores";
 import type { AnnotationTool } from "../../types";
+import { ArrowRight, Circle, Diamond, Minus } from "lucide-react";
 
 interface ToolSettingsPopoverProps {
   tool: AnnotationTool;
@@ -13,9 +14,19 @@ export function ToolSettingsPopover({
   onClose,
   anchorEl,
 }: ToolSettingsPopoverProps) {
-  const { getToolSettings, setToolColor, setToolOpacity, setToolThickness } =
-    useAnnotationStore();
+  const {
+    getToolSettings,
+    setToolColor,
+    setToolOpacity,
+    setToolThickness,
+    getArrowSettings,
+    setArrowLineStyle,
+    setArrowCurveStyle,
+    setArrowHeadStyle,
+    setArrowTailStyle,
+  } = useAnnotationStore();
   const settings = getToolSettings(tool);
+  const arrowSettings = getArrowSettings();
   const presets = TOOL_COLOR_PRESETS[tool] || TOOL_COLOR_PRESETS.pen;
   const popoverRef = useRef<HTMLDivElement>(null);
 
@@ -147,7 +158,7 @@ export function ToolSettingsPopover({
 
       {/* Thickness slider */}
       {showThickness && (
-        <div className="mb-1">
+        <div className="mb-3">
           <div className="flex items-center justify-between mb-1.5">
             <label className="text-sm text-gray-700 dark:text-gray-300">
               {getThicknessLabel()}
@@ -180,8 +191,113 @@ export function ToolSettingsPopover({
         </div>
       )}
 
+      {/* Arrow-specific settings */}
+      {tool === "arrow" && (
+        <>
+          {/* Line Style */}
+          <div className="mb-3">
+            <label className="block text-sm text-gray-700 dark:text-gray-300 mb-1.5">
+              Line Style
+            </label>
+            <div className="flex gap-1">
+              {(["solid", "dashed", "dotted"] as const).map((style) => (
+                <button
+                  key={style}
+                  onClick={() => setArrowLineStyle(style)}
+                  className={`flex-1 px-2 py-1 text-xs rounded border transition-colors ${
+                    arrowSettings.lineStyle === style
+                      ? "bg-blue-100 dark:bg-blue-900/30 border-blue-500 text-blue-600"
+                      : "border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+                  }`}
+                >
+                  {style.charAt(0).toUpperCase() + style.slice(1)}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Curve Style */}
+          <div className="mb-3">
+            <label className="block text-sm text-gray-700 dark:text-gray-300 mb-1.5">
+              Shape
+            </label>
+            <div className="flex gap-1">
+              {(["straight", "curved"] as const).map((style) => (
+                <button
+                  key={style}
+                  onClick={() => setArrowCurveStyle(style)}
+                  className={`flex-1 px-2 py-1 text-xs rounded border transition-colors ${
+                    arrowSettings.curveStyle === style
+                      ? "bg-blue-100 dark:bg-blue-900/30 border-blue-500 text-blue-600"
+                      : "border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+                  }`}
+                >
+                  {style.charAt(0).toUpperCase() + style.slice(1)}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Head Style */}
+          <div className="mb-3">
+            <label className="block text-sm text-gray-700 dark:text-gray-300 mb-1.5">
+              Head Style
+            </label>
+            <div className="flex gap-1">
+              {[
+                { value: "arrow" as const, icon: ArrowRight, label: "Arrow" },
+                { value: "circle" as const, icon: Circle, label: "Circle" },
+                { value: "diamond" as const, icon: Diamond, label: "Diamond" },
+                { value: "none" as const, icon: Minus, label: "None" },
+              ].map(({ value, icon: Icon, label }) => (
+                <button
+                  key={value}
+                  onClick={() => setArrowHeadStyle(value)}
+                  className={`flex-1 p-1.5 rounded border transition-colors ${
+                    arrowSettings.headStyle === value
+                      ? "bg-blue-100 dark:bg-blue-900/30 border-blue-500 text-blue-600"
+                      : "border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+                  }`}
+                  title={label}
+                >
+                  <Icon className="w-4 h-4 mx-auto" />
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Tail Style */}
+          <div className="mb-1">
+            <label className="block text-sm text-gray-700 dark:text-gray-300 mb-1.5">
+              Tail Style
+            </label>
+            <div className="flex gap-1">
+              {[
+                { value: "none" as const, icon: Minus, label: "None" },
+                { value: "arrow" as const, icon: ArrowRight, label: "Arrow" },
+                { value: "circle" as const, icon: Circle, label: "Circle" },
+                { value: "diamond" as const, icon: Diamond, label: "Diamond" },
+              ].map(({ value, icon: Icon, label }) => (
+                <button
+                  key={value}
+                  onClick={() => setArrowTailStyle(value)}
+                  className={`flex-1 p-1.5 rounded border transition-colors ${
+                    arrowSettings.tailStyle === value
+                      ? "bg-blue-100 dark:bg-blue-900/30 border-blue-500 text-blue-600"
+                      : "border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+                  }`}
+                  title={label}
+                >
+                  <Icon className="w-4 h-4 mx-auto" />
+                </button>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
+
       {/* No settings available */}
-      {!showColor && !showOpacity && !showThickness && (
+      {tool === "select" && (
         <div className="text-sm text-gray-500 dark:text-gray-400">
           No settings available for this tool.
         </div>

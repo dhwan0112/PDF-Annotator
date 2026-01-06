@@ -16,6 +16,7 @@ export function TabBar({ onTabChange }: TabBarProps) {
     closeTab,
     moveTabToGroup,
     closeGroupTabs,
+    reorderTab,
   } = useTabStore();
 
   const {
@@ -36,6 +37,7 @@ export function TabBar({ onTabChange }: TabBarProps) {
   // Drag and drop state
   const [draggingTabId, setDraggingTabId] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<string | null>(null); // groupId or "ungrouped"
+  const [dropTargetTab, setDropTargetTab] = useState<{ tabId: string; position: "before" | "after" } | null>(null);
 
   // Close context menu when clicking outside
   useEffect(() => {
@@ -157,12 +159,68 @@ export function TabBar({ onTabChange }: TabBarProps) {
   const handleDragEnd = () => {
     setDraggingTabId(null);
     setDropTarget(null);
+    setDropTargetTab(null);
   };
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
     e.dataTransfer.dropEffect = "move";
+  };
+
+  const handleTabDragOver = (e: React.DragEvent, tabId: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    e.dataTransfer.dropEffect = "move";
+
+    if (!draggingTabId || draggingTabId === tabId) return;
+
+    // Determine if dropping before or after based on mouse position
+    const rect = e.currentTarget.getBoundingClientRect();
+    const midpoint = rect.left + rect.width / 2;
+    const position = e.clientX < midpoint ? "before" : "after";
+    setDropTargetTab({ tabId, position });
+  };
+
+  const handleTabDragLeave = () => {
+    setDropTargetTab(null);
+  };
+
+  const handleDropOnTab = (e: React.DragEvent, targetTabId: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    const tabId = draggingTabId || e.dataTransfer.getData("text/plain");
+    if (!tabId || tabId === targetTabId) {
+      handleDragEnd();
+      return;
+    }
+
+    const draggedTab = tabs.find((t) => t.id === tabId);
+    const targetTab = tabs.find((t) => t.id === targetTabId);
+    if (!draggedTab || !targetTab) {
+      handleDragEnd();
+      return;
+    }
+
+    // If in same group (or both ungrouped), reorder
+    if (draggedTab.groupId === targetTab.groupId) {
+      const rect = e.currentTarget.getBoundingClientRect();
+      const midpoint = rect.left + rect.width / 2;
+      const position = e.clientX < midpoint ? "before" : "after";
+      reorderTab(tabId, targetTabId, position);
+    } else {
+      // Move to target tab's group
+      if (draggedTab.documentId && draggedTab.groupId) {
+        removeDocumentFromGroup(draggedTab.groupId, draggedTab.documentId);
+      }
+      if (targetTab.groupId && draggedTab.documentId) {
+        addDocumentToGroup(targetTab.groupId, draggedTab.documentId);
+      }
+      moveTabToGroup(tabId, targetTab.groupId);
+    }
+
+    handleDragEnd();
   };
 
   const handleDropOnGroup = (e: React.DragEvent, groupId: string) => {
@@ -231,6 +289,8 @@ export function TabBar({ onTabChange }: TabBarProps) {
     const fileName = tab.filePath.split(/[\\/]/).pop() || "Untitled";
     const displayName = fileName.length > 20 ? fileName.substring(0, 17) + "..." : fileName;
     const groupColor = group?.color;
+    const isDropTargetBefore = dropTargetTab?.tabId === tab.id && dropTargetTab?.position === "before";
+    const isDropTargetAfter = dropTargetTab?.tabId === tab.id && dropTargetTab?.position === "after";
 
     // Generate styles based on hex color
     const bgStyle = groupColor ? { backgroundColor: `${groupColor}20` } : undefined;
@@ -243,10 +303,13 @@ export function TabBar({ onTabChange }: TabBarProps) {
         draggable="true"
         onDragStart={(e) => handleDragStart(e, tab.id)}
         onDragEnd={handleDragEnd}
+        onDragOver={(e) => handleTabDragOver(e, tab.id)}
+        onDragLeave={handleTabDragLeave}
+        onDrop={(e) => handleDropOnTab(e, tab.id)}
         onClick={() => !isDragging && handleTabClick(tab)}
         onMouseDown={(e) => handleMiddleClick(e, tab.id)}
         onContextMenu={(e) => handleContextMenu(e, tab.id)}
-        className={`group flex items-center gap-1.5 px-2.5 py-1.5 cursor-grab active:cursor-grabbing min-w-0 max-w-[180px] transition-all select-none ${
+        className={`group flex items-center gap-1.5 px-2.5 py-1.5 cursor-grab active:cursor-grabbing min-w-0 max-w-[180px] transition-all select-none relative ${
           isActive
             ? "bg-gray-100 dark:bg-gray-800 rounded-t-lg border-t border-l border-r border-gray-300 dark:border-gray-600 -mb-px"
             : "hover:bg-gray-300 dark:hover:bg-gray-700 rounded-t-md mt-1 mx-0.5 border border-transparent"
@@ -254,6 +317,14 @@ export function TabBar({ onTabChange }: TabBarProps) {
         style={isActive ? borderStyle : bgStyle}
         title={tab.filePath}
       >
+        {/* Drop indicator - before */}
+        {isDropTargetBefore && (
+          <div className="absolute -left-1 top-0 bottom-0 w-1 bg-blue-500 rounded-full" />
+        )}
+        {/* Drop indicator - after */}
+        {isDropTargetAfter && (
+          <div className="absolute -right-1 top-0 bottom-0 w-1 bg-blue-500 rounded-full" />
+        )}
         <FileText
           className={`w-3.5 h-3.5 flex-shrink-0 ${isActive ? "text-blue-500" : !groupColor ? "text-gray-500 dark:text-gray-400" : ""}`}
           style={!isActive && groupColor ? textStyle : undefined}
