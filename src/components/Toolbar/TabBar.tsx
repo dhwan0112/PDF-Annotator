@@ -319,30 +319,32 @@ export function TabBar({ onTabChange }: TabBarProps) {
       >
         {/* Drop indicator - before */}
         {isDropTargetBefore && (
-          <div className="absolute -left-1 top-0 bottom-0 w-1 bg-blue-500 rounded-full" />
+          <div className="absolute -left-1 top-0 bottom-0 w-1 bg-blue-500 rounded-full pointer-events-none" />
         )}
         {/* Drop indicator - after */}
         {isDropTargetAfter && (
-          <div className="absolute -right-1 top-0 bottom-0 w-1 bg-blue-500 rounded-full" />
+          <div className="absolute -right-1 top-0 bottom-0 w-1 bg-blue-500 rounded-full pointer-events-none" />
         )}
         <FileText
-          className={`w-3.5 h-3.5 flex-shrink-0 ${isActive ? "text-blue-500" : !groupColor ? "text-gray-500 dark:text-gray-400" : ""}`}
+          className={`w-3.5 h-3.5 flex-shrink-0 pointer-events-none ${isActive ? "text-blue-500" : !groupColor ? "text-gray-500 dark:text-gray-400" : ""}`}
           style={!isActive && groupColor ? textStyle : undefined}
         />
         <span
-          className={`truncate text-xs ${isActive ? "text-gray-900 dark:text-gray-100 font-medium" : !groupColor ? "text-gray-600 dark:text-gray-400" : ""}`}
+          className={`truncate text-xs pointer-events-none ${isActive ? "text-gray-900 dark:text-gray-100 font-medium" : !groupColor ? "text-gray-600 dark:text-gray-400" : ""}`}
           style={!isActive && groupColor ? textStyle : undefined}
         >
           {displayName}
         </span>
         <button
           onClick={(e) => handleCloseTab(e, tab.id)}
+          draggable="false"
+          onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
           className={`p-0.5 rounded hover:bg-gray-400 dark:hover:bg-gray-600 ${
             isActive ? "opacity-100" : "opacity-0 group-hover:opacity-100"
           }`}
           title="Close tab"
         >
-          <X className="w-3 h-3 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200" />
+          <X className="w-3 h-3 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 pointer-events-none" />
         </button>
       </div>
     );

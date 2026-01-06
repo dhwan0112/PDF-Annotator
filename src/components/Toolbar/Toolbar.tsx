@@ -266,18 +266,27 @@ export function Toolbar() {
                 ref={(el) => {
                   if (el) toolButtonRefs.current.set(id, el);
                 }}
-                onClick={() => setCurrentTool(id)}
+                onClick={() => {
+                  if (currentTool === id && id !== "select") {
+                    // Clicking the same tool again toggles settings
+                    if (settingsPopoverTool === id) {
+                      setSettingsPopoverTool(null);
+                      setSettingsAnchorEl(null);
+                    } else {
+                      setSettingsPopoverTool(id);
+                      setSettingsAnchorEl(toolButtonRefs.current.get(id) || null);
+                    }
+                  } else {
+                    setCurrentTool(id);
+                  }
+                }}
                 onContextMenu={(e) => {
                   e.preventDefault();
                   setSettingsPopoverTool(id);
                   setSettingsAnchorEl(toolButtonRefs.current.get(id) || null);
                 }}
-                onDoubleClick={() => {
-                  setSettingsPopoverTool(id);
-                  setSettingsAnchorEl(toolButtonRefs.current.get(id) || null);
-                }}
                 onPointerDown={(e) => {
-                  // Show settings on stylus pen long-press or barrel button
+                  // Show settings on stylus pen tap or barrel button
                   if (e.pointerType === "pen") {
                     // If pen button is pressed (buttons === 2 or 32), show settings immediately
                     if (e.buttons === 2 || e.buttons === 32) {
