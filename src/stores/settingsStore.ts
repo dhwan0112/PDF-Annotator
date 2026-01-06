@@ -47,6 +47,7 @@ const DEFAULT_SHORTCUTS: Record<string, ShortcutConfig> = {
 
   // File
   "file.open": { id: "file.open", label: "Open File", category: "File", binding: { key: "o", ctrl: true } },
+  "file.save": { id: "file.save", label: "Save PDF with Annotations", category: "File", binding: { key: "s", ctrl: true } },
   "file.backToLibrary": { id: "file.backToLibrary", label: "Back to Library", category: "File", binding: { key: "Escape" } },
 
   // Features
