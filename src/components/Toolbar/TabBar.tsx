@@ -486,9 +486,20 @@ export function TabBar({ onTabChange }: TabBarProps) {
         onDrop={handleDropOnUngrouped}
       >
         {ungroupedTabs.map((tab) => renderTab(tab))}
-        {/* Drop hint when dragging */}
-        {draggingTabId && tabs.find(t => t.id === draggingTabId)?.groupId && ungroupedTabs.length === 0 && (
-          <div className="px-3 py-1 text-xs text-gray-500 dark:text-gray-400 italic">
+        {/* Explicit drop zone for ungrouping - always visible when dragging grouped tab */}
+        {draggingTabId && tabs.find(t => t.id === draggingTabId)?.groupId && (
+          <div
+            className="flex items-center px-3 py-1 mx-1 text-xs text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 border-2 border-dashed border-blue-400 rounded-lg cursor-pointer hover:bg-blue-100 dark:hover:bg-blue-900/50"
+            onDragOver={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+            }}
+            onDrop={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              handleDropOnUngrouped(e);
+            }}
+          >
             Drop here to ungroup
           </div>
         )}

@@ -38,7 +38,7 @@ export function AnnotationCanvas({
   marginOffset = 0,
 }: AnnotationCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const { currentTool, getCurrentColor, getStrokeWidth, getHighlightOpacity, addAnnotation, getAnnotationsForPage, getArrowSettings } =
+  const { currentTool, getCurrentColor, getStrokeWidth, getHighlightOpacity, addAnnotation, deleteAnnotation, getAnnotationsForPage, getArrowSettings } =
     useAnnotationStore();
   const currentColor = getCurrentColor();
   const strokeWidth = getStrokeWidth();
@@ -47,6 +47,7 @@ export function AnnotationCanvas({
 
   const isDrawingRef = useRef(false);
   const currentStrokeRef = useRef<StrokePoint[]>([]);
+  const erasedIdsRef = useRef<Set<string>>(new Set()); // Track erased annotations to avoid double-delete
   const [rectPreview, setRectPreview] = useState<RectPreview | null>(null);
   const [arrowPreview, setArrowPreview] = useState<ArrowPreview | null>(null);
 
@@ -74,6 +75,94 @@ export function AnnotationCanvas({
       };
     },
     [scale, marginOffset]
+  );
+
+  // Find annotation at a given point (for eraser)
+  const findAnnotationAtPoint = useCallback(
+    (point: Point, eraserSize: number): string | null => {
+      const hitRadius = eraserSize / 2;
+
+      // Check ink annotations
+      for (const annotation of inkAnnotations) {
+        for (const stroke of annotation.strokes) {
+          for (const p of stroke.points) {
+            const dx = p.x - point.x;
+            const dy = p.y - point.y;
+            if (dx * dx + dy * dy < hitRadius * hitRadius) {
+              return annotation.id;
+            }
+          }
+        }
+      }
+
+      // Check highlighter ink annotations
+      for (const annotation of highlighterInkAnnotations) {
+        for (const stroke of annotation.strokes) {
+          for (const p of stroke.points) {
+            const dx = p.x - point.x;
+            const dy = p.y - point.y;
+            if (dx * dx + dy * dy < hitRadius * hitRadius) {
+              return annotation.id;
+            }
+          }
+        }
+      }
+
+      // Check rect annotations
+      for (const annotation of rectAnnotations) {
+        const r = annotation.rect;
+        if (
+          point.x >= r.x - hitRadius &&
+          point.x <= r.x + r.width + hitRadius &&
+          point.y >= r.y - hitRadius &&
+          point.y <= r.y + r.height + hitRadius
+        ) {
+          // Check if near edge
+          const nearLeft = Math.abs(point.x - r.x) < hitRadius;
+          const nearRight = Math.abs(point.x - (r.x + r.width)) < hitRadius;
+          const nearTop = Math.abs(point.y - r.y) < hitRadius;
+          const nearBottom = Math.abs(point.y - (r.y + r.height)) < hitRadius;
+          if (nearLeft || nearRight || nearTop || nearBottom) {
+            return annotation.id;
+          }
+        }
+      }
+
+      // Check arrow annotations
+      for (const annotation of arrowAnnotations) {
+        // Check distance to line segment
+        const { start, end } = annotation;
+        const dx = end.x - start.x;
+        const dy = end.y - start.y;
+        const lengthSq = dx * dx + dy * dy;
+        if (lengthSq === 0) {
+          const d = Math.sqrt((point.x - start.x) ** 2 + (point.y - start.y) ** 2);
+          if (d < hitRadius) return annotation.id;
+        } else {
+          const t = Math.max(0, Math.min(1, ((point.x - start.x) * dx + (point.y - start.y) * dy) / lengthSq));
+          const projX = start.x + t * dx;
+          const projY = start.y + t * dy;
+          const d = Math.sqrt((point.x - projX) ** 2 + (point.y - projY) ** 2);
+          if (d < hitRadius) return annotation.id;
+        }
+      }
+
+      return null;
+    },
+    [inkAnnotations, highlighterInkAnnotations, rectAnnotations, arrowAnnotations]
+  );
+
+  // Erase annotation at point
+  const eraseAtPoint = useCallback(
+    (point: Point) => {
+      const eraserSize = strokeWidth; // Use current stroke width as eraser size
+      const annotationId = findAnnotationAtPoint(point, eraserSize);
+      if (annotationId && !erasedIdsRef.current.has(annotationId)) {
+        erasedIdsRef.current.add(annotationId);
+        deleteAnnotation(annotationId);
+      }
+    },
+    [findAnnotationAtPoint, deleteAnnotation, strokeWidth]
   );
 
   // Convert points to SVG path using perfect-freehand
@@ -438,7 +527,11 @@ export function AnnotationCanvas({
 
       isDrawingRef.current = true;
 
-      if (currentTool === "rect") {
+      if (currentTool === "eraser") {
+        // Clear tracked erased IDs for new eraser stroke
+        erasedIdsRef.current.clear();
+        eraseAtPoint(pdfPoint);
+      } else if (currentTool === "rect") {
         setRectPreview({
           startX: pdfPoint.x,
           startY: pdfPoint.y,
@@ -459,7 +552,7 @@ export function AnnotationCanvas({
         currentStrokeRef.current = [point];
       }
     },
-    [currentTool, screenToPdf]
+    [currentTool, screenToPdf, eraseAtPoint]
   );
 
   const handlePointerMove = useCallback(
@@ -473,7 +566,9 @@ export function AnnotationCanvas({
       const y = e.clientY - canvasRect.top;
       const pdfPoint = screenToPdf(x, y);
 
-      if (currentTool === "rect") {
+      if (currentTool === "eraser") {
+        eraseAtPoint(pdfPoint);
+      } else if (currentTool === "rect") {
         setRectPreview((prev) =>
           prev ? { ...prev, endX: pdfPoint.x, endY: pdfPoint.y } : null
         );
@@ -492,7 +587,7 @@ export function AnnotationCanvas({
         renderAnnotations();
       }
     },
-    [currentTool, screenToPdf, renderAnnotations]
+    [currentTool, screenToPdf, renderAnnotations, eraseAtPoint]
   );
 
   const handlePointerUp = useCallback(
@@ -501,6 +596,13 @@ export function AnnotationCanvas({
 
       e.currentTarget.releasePointerCapture(e.pointerId);
       isDrawingRef.current = false;
+
+      if (currentTool === "eraser") {
+        // Eraser actions are handled in pointer down/move, just cleanup
+        erasedIdsRef.current.clear();
+        renderAnnotations();
+        return;
+      }
 
       if (currentTool === "rect" && rectPreview) {
         // Create rect annotation
