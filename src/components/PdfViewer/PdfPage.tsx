@@ -2,7 +2,6 @@ import { useEffect, useRef, useState, memo } from "react";
 import type { PDFDocumentProxy, PDFPageProxy } from "pdfjs-dist";
 import { TextLayer } from "pdfjs-dist";
 import { AnnotationLayer, TextSelectionHandler } from "../AnnotationLayer";
-import { useSettingsStore } from "../../stores";
 
 interface PdfPageProps {
   pdfDocument: PDFDocumentProxy;
@@ -13,7 +12,8 @@ interface PdfPageProps {
 }
 
 // Margin area dimensions (in pixels, before scaling)
-const MARGIN_WIDTH = 150; // Left and right margin for drawing
+// Always enabled for direct pen drawing beside PDF
+const MARGIN_WIDTH = 200; // Left and right margin for drawing
 
 export const PdfPage = memo(function PdfPage({
   pdfDocument,
@@ -130,9 +130,8 @@ export const PdfPage = memo(function PdfPage({
     };
   }, [page, scale, rotation, isVisible]);
 
-  // Calculate margin-extended dimensions
-  const { marginDrawingEnabled } = useSettingsStore();
-  const marginWidth = marginDrawingEnabled ? MARGIN_WIDTH * scale : 0;
+  // Calculate margin-extended dimensions (always enabled for pen drawing)
+  const marginWidth = MARGIN_WIDTH * scale;
   const totalWidth = dimensions.width + marginWidth * 2;
   const totalHeight = dimensions.height;
 
@@ -143,12 +142,10 @@ export const PdfPage = memo(function PdfPage({
       style={{ width: totalWidth, height: totalHeight }}
     >
       {/* Left margin area (drawable) */}
-      {marginDrawingEnabled && (
-        <div
-          className="absolute top-0 left-0 bg-gray-50 dark:bg-gray-850 border-r border-gray-200 dark:border-gray-700"
-          style={{ width: marginWidth, height: totalHeight }}
-        />
-      )}
+      <div
+        className="absolute top-0 left-0 bg-gray-50 dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700"
+        style={{ width: marginWidth, height: totalHeight }}
+      />
 
       {/* PDF page area */}
       <div
@@ -187,16 +184,14 @@ export const PdfPage = memo(function PdfPage({
       </div>
 
       {/* Right margin area (drawable) */}
-      {marginDrawingEnabled && (
-        <div
-          className="absolute top-0 bg-gray-50 dark:bg-gray-850 border-l border-gray-200 dark:border-gray-700"
-          style={{
-            left: marginWidth + dimensions.width,
-            width: marginWidth,
-            height: totalHeight,
-          }}
-        />
-      )}
+      <div
+        className="absolute top-0 bg-gray-50 dark:bg-gray-800 border-l border-gray-200 dark:border-gray-700"
+        style={{
+          left: marginWidth + dimensions.width,
+          width: marginWidth,
+          height: totalHeight,
+        }}
+      />
 
       {/* Full-width Annotation Layer (covers PDF + margins) */}
       {isVisible && (
@@ -212,7 +207,7 @@ export const PdfPage = memo(function PdfPage({
       {/* Page number indicator */}
       <div
         className="absolute bottom-2 bg-black/50 text-white text-xs px-2 py-1 rounded z-10"
-        style={{ right: marginDrawingEnabled ? marginWidth + 8 : 8 }}
+        style={{ right: marginWidth + 8 }}
       >
         {pageNumber}
       </div>

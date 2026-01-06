@@ -3,13 +3,12 @@ import { Toolbar } from "./components/Toolbar";
 import { Sidebar } from "./components/Sidebar";
 import { PdfViewer } from "./components/PdfViewer";
 import { Library } from "./components/Library";
-import { MarginNotesPanel } from "./components/MarginNotes";
 import { MindMapCanvas } from "./components/MindMap";
 import { useUiStore, usePdfStore, useAnnotationStore, useLibraryStore, useSettingsStore, useStudyGroupStore, useMindMapStore } from "./stores";
 import { usePdfDocument, useAnnotationPersistence, useBookmarkPersistence, useAutoSave, usePenTablet } from "./hooks";
 
 function App() {
-  const { theme, currentView, setCurrentView, marginNotesVisible, activeMindMapId, setActiveMindMapId, mindMapPanelVisible, toggleMindMapPanel, mindMapPanelWidth } = useUiStore();
+  const { theme, currentView, setCurrentView, activeMindMapId, setActiveMindMapId, mindMapPanelVisible, toggleMindMapPanel, mindMapPanelWidth } = useUiStore();
   const { pdfDocument } = usePdfDocument();
   const { filePath, setFilePath, currentPage } = usePdfStore();
   const { addDocument, updateDocumentProgress } = useLibraryStore();
@@ -28,7 +27,7 @@ function App() {
     goToLastPage,
   } = usePdfStore();
   const { undo, redo, setCurrentTool } = useAnnotationStore();
-  const { findShortcutByEvent, toggleMarginDrawing } = useSettingsStore();
+  const { findShortcutByEvent } = useSettingsStore();
 
   // Apply theme on mount and when it changes
   useEffect(() => {
@@ -197,9 +196,6 @@ function App() {
 
         // Feature shortcuts
         switch (shortcutId) {
-          case "feature.toggleMargin":
-            toggleMarginDrawing();
-            break;
           case "feature.toggleMindMap":
             toggleMindMapPanel();
             break;
@@ -222,7 +218,6 @@ function App() {
     goToFirstPage,
     goToLastPage,
     setCurrentTool,
-    toggleMarginDrawing,
     toggleMindMapPanel,
   ]);
 
@@ -237,11 +232,6 @@ function App() {
     setActiveMindMapId(null);
     setCurrentView("library");
   }, [setActiveMindMapId, setCurrentView]);
-
-  // Get document ID from library for margin notes
-  const documentId = filePath ?
-    useLibraryStore.getState().documents.find(d => d.file_path === filePath)?.id || filePath
-    : "";
 
   // Get active study group's first mind map for split panel view
   const { activeStudyGroupId } = useStudyGroupStore();
@@ -263,12 +253,6 @@ function App() {
             <Sidebar pdfDocument={pdfDocument} />
             <main className="flex-1 flex overflow-hidden">
               <PdfViewer pdfDocument={pdfDocument} />
-              {marginNotesVisible && filePath && (
-                <MarginNotesPanel
-                  documentId={documentId}
-                  pageNumber={currentPage}
-                />
-              )}
             </main>
             {/* Mind Map Split Panel */}
             {mindMapPanelVisible && splitPanelMindMapId && (
