@@ -28,8 +28,6 @@ import {
   Library,
   Settings2,
   Keyboard,
-  PanelRightClose,
-  PanelRightOpen,
 } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
 import type { AnnotationTool } from "../../types";
@@ -64,7 +62,7 @@ export function Toolbar() {
     viewMode,
     setViewMode,
   } = usePdfStore();
-  const { theme, setTheme, currentView, setCurrentView, marginNotesVisible, toggleMarginNotes } = useUiStore();
+  const { theme, setTheme, currentView, setCurrentView } = useUiStore();
 
   const [settingsPopoverTool, setSettingsPopoverTool] = useState<AnnotationTool | null>(null);
   const [settingsAnchorEl, setSettingsAnchorEl] = useState<HTMLElement | null>(null);
@@ -303,14 +301,6 @@ export function Toolbar() {
       </div>
 
       <div className="flex-1" />
-
-      {/* Margin Notes toggle */}
-      <ToolbarButton
-        icon={marginNotesVisible ? PanelRightClose : PanelRightOpen}
-        label={marginNotesVisible ? "Hide margin notes" : "Show margin notes"}
-        active={marginNotesVisible}
-        onClick={toggleMarginNotes}
-      />
 
       {/* Keyboard shortcuts settings */}
       <ToolbarButton

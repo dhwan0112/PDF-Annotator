@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { persist } from "zustand/middleware";
 import type { PdfMetadata, ViewMode } from "../types";
 
 interface PdfState {
@@ -43,16 +44,18 @@ const ZOOM_LEVELS = [0.5, 0.75, 1.0, 1.25, 1.5, 2.0, 2.5, 3.0];
 const MIN_ZOOM = 0.25;
 const MAX_ZOOM = 4.0;
 
-export const usePdfStore = create<PdfState>((set, get) => ({
-  // Initial state
-  filePath: null,
-  metadata: null,
-  currentPage: 1,
-  totalPages: 0,
-  zoomLevel: 1.0,
-  rotation: 0,
-  viewMode: "continuous",
-  scrollPosition: 0,
+export const usePdfStore = create<PdfState>()(
+  persist(
+    (set, get) => ({
+      // Initial state
+      filePath: null,
+      metadata: null,
+      currentPage: 1,
+      totalPages: 0,
+      zoomLevel: 1.0,
+      rotation: 0,
+      viewMode: "continuous",
+      scrollPosition: 0,
 
   // Actions
   setFile: (filePath, metadata) =>
@@ -171,4 +174,17 @@ export const usePdfStore = create<PdfState>((set, get) => ({
     const { rotation } = get();
     set({ rotation: (rotation - 90 + 360) % 360 });
   },
-}));
+    }),
+    {
+      name: "pdf-annotator-session",
+      partialize: (state) => ({
+        filePath: state.filePath,
+        metadata: state.metadata,
+        currentPage: state.currentPage,
+        zoomLevel: state.zoomLevel,
+        rotation: state.rotation,
+        viewMode: state.viewMode,
+      }),
+    }
+  )
+);

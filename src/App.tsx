@@ -5,7 +5,7 @@ import { PdfViewer } from "./components/PdfViewer";
 import { Library } from "./components/Library";
 import { MindMapCanvas } from "./components/MindMap";
 import { useUiStore, usePdfStore, useAnnotationStore, useLibraryStore, useSettingsStore, useStudyGroupStore, useMindMapStore } from "./stores";
-import { usePdfDocument, useAnnotationPersistence, useBookmarkPersistence, useAutoSave, usePenTablet } from "./hooks";
+import { usePdfDocument, useAnnotationPersistence, useBookmarkPersistence, useAutoSave, usePenTablet, useSessionRestore } from "./hooks";
 
 function App() {
   const { theme, currentView, setCurrentView, activeMindMapId, setActiveMindMapId, mindMapPanelVisible, toggleMindMapPanel, mindMapPanelWidth } = useUiStore();
@@ -18,6 +18,7 @@ function App() {
   useBookmarkPersistence();
   useAutoSave({ interval: 30000 }); // Periodic backup every 30 seconds
   usePenTablet(); // Auto-switch to pen tool when stylus detected
+  useSessionRestore(); // Restore previous session on startup
   const {
     zoomIn,
     zoomOut,
