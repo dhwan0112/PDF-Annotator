@@ -9,6 +9,14 @@ export interface ToolSettings {
   thickness: number;
 }
 
+// Arrow-specific settings
+export interface ArrowSettings {
+  lineStyle: "solid" | "dashed" | "dotted";
+  curveStyle: "straight" | "curved" | "bezier";
+  headStyle: "arrow" | "circle" | "diamond" | "none";
+  tailStyle: "none" | "arrow" | "circle" | "diamond";
+}
+
 // Drawing tools that can be used with pen tablet
 const DRAWING_TOOLS: AnnotationTool[] = ["pen", "highlighter", "eraser", "underline", "strikeout"];
 
@@ -25,6 +33,9 @@ interface AnnotationState {
   // Per-tool settings
   toolSettings: Record<string, ToolSettings>;
 
+  // Arrow-specific settings
+  arrowSettings: ArrowSettings;
+
   // Selection
   selectedAnnotationId: string | null;
 
@@ -39,6 +50,13 @@ interface AnnotationState {
   setToolColor: (tool: AnnotationTool, color: string) => void;
   setToolOpacity: (tool: AnnotationTool, opacity: number) => void;
   setToolThickness: (tool: AnnotationTool, thickness: number) => void;
+
+  // Arrow settings
+  getArrowSettings: () => ArrowSettings;
+  setArrowLineStyle: (style: ArrowSettings["lineStyle"]) => void;
+  setArrowCurveStyle: (style: ArrowSettings["curveStyle"]) => void;
+  setArrowHeadStyle: (style: ArrowSettings["headStyle"]) => void;
+  setArrowTailStyle: (style: ArrowSettings["tailStyle"]) => void;
 
   // Legacy getters for current tool
   getCurrentColor: () => string;
@@ -88,6 +106,14 @@ export const TOOL_COLOR_PRESETS: Record<string, string[]> = {
   text: ["#000000", "#ef4444", "#3b82f6", "#22c55e", "#f59e0b", "#8b5cf6"],
 };
 
+// Default arrow settings
+const DEFAULT_ARROW_SETTINGS: ArrowSettings = {
+  lineStyle: "solid",
+  curveStyle: "straight",
+  headStyle: "arrow",
+  tailStyle: "none",
+};
+
 export const useAnnotationStore = create<AnnotationState>()(
   persist(
     (set, get) => ({
@@ -96,6 +122,7 @@ export const useAnnotationStore = create<AnnotationState>()(
       currentTool: "select",
       lastDrawingTool: "pen",
       toolSettings: { ...DEFAULT_TOOL_SETTINGS },
+      arrowSettings: { ...DEFAULT_ARROW_SETTINGS },
       selectedAnnotationId: null,
       undoStack: [],
       redoStack: [],
@@ -152,6 +179,25 @@ export const useAnnotationStore = create<AnnotationState>()(
             [tool]: { ...toolSettings[tool], thickness: Math.max(1, Math.min(50, thickness)) },
           },
         });
+      },
+
+      // Arrow settings
+      getArrowSettings: () => get().arrowSettings,
+
+      setArrowLineStyle: (style) => {
+        set({ arrowSettings: { ...get().arrowSettings, lineStyle: style } });
+      },
+
+      setArrowCurveStyle: (style) => {
+        set({ arrowSettings: { ...get().arrowSettings, curveStyle: style } });
+      },
+
+      setArrowHeadStyle: (style) => {
+        set({ arrowSettings: { ...get().arrowSettings, headStyle: style } });
+      },
+
+      setArrowTailStyle: (style) => {
+        set({ arrowSettings: { ...get().arrowSettings, tailStyle: style } });
       },
 
       // Legacy getters
@@ -349,6 +395,7 @@ export const useAnnotationStore = create<AnnotationState>()(
       partialize: (state) => ({
         toolSettings: state.toolSettings,
         lastDrawingTool: state.lastDrawingTool,
+        arrowSettings: state.arrowSettings,
       }),
     }
   )

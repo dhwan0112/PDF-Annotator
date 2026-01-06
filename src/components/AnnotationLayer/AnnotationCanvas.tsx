@@ -1,7 +1,7 @@
 import { useRef, useEffect, useCallback, useState } from "react";
 import { getStroke } from "perfect-freehand";
 import { useAnnotationStore } from "../../stores";
-import type { InkAnnotation, HighlighterInkAnnotation, RectAnnotation, Point, Stroke, Rect } from "../../types";
+import type { InkAnnotation, HighlighterInkAnnotation, RectAnnotation, ArrowAnnotation, Point, Stroke, Rect } from "../../types";
 
 interface AnnotationCanvasProps {
   pageNumber: number;
@@ -24,6 +24,12 @@ interface RectPreview {
   endY: number;
 }
 
+interface ArrowPreview {
+  start: Point;
+  end: Point;
+  controlPoint?: Point;
+}
+
 export function AnnotationCanvas({
   pageNumber,
   width,
@@ -32,15 +38,17 @@ export function AnnotationCanvas({
   marginOffset = 0,
 }: AnnotationCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const { currentTool, getCurrentColor, getStrokeWidth, getHighlightOpacity, addAnnotation, getAnnotationsForPage } =
+  const { currentTool, getCurrentColor, getStrokeWidth, getHighlightOpacity, addAnnotation, getAnnotationsForPage, getArrowSettings } =
     useAnnotationStore();
   const currentColor = getCurrentColor();
   const strokeWidth = getStrokeWidth();
   const highlightOpacity = getHighlightOpacity();
+  const arrowSettings = getArrowSettings();
 
   const isDrawingRef = useRef(false);
   const currentStrokeRef = useRef<StrokePoint[]>([]);
   const [rectPreview, setRectPreview] = useState<RectPreview | null>(null);
+  const [arrowPreview, setArrowPreview] = useState<ArrowPreview | null>(null);
 
   // Get annotations for this page
   const annotations = getAnnotationsForPage(pageNumber);
@@ -52,6 +60,9 @@ export function AnnotationCanvas({
   );
   const rectAnnotations = annotations.filter(
     (a): a is RectAnnotation => a.type === "rect"
+  );
+  const arrowAnnotations = annotations.filter(
+    (a): a is ArrowAnnotation => a.type === "arrow"
   );
 
   // Convert screen coordinates to PDF coordinates
@@ -150,6 +161,149 @@ export function AnnotationCanvas({
     [scale, marginOffset]
   );
 
+  // Draw arrow on canvas
+  const drawArrow = useCallback(
+    (
+      ctx: CanvasRenderingContext2D,
+      start: Point,
+      end: Point,
+      color: string,
+      strokeW: number,
+      lineStyle: "solid" | "dashed" | "dotted" = "solid",
+      curveStyle: "straight" | "curved" | "bezier" = "straight",
+      headStyle: "arrow" | "circle" | "diamond" | "none" = "arrow",
+      tailStyle: "none" | "arrow" | "circle" | "diamond" = "none",
+      controlPoint?: Point,
+      isPreview: boolean = false
+    ) => {
+      const sx = start.x * scale + marginOffset;
+      const sy = start.y * scale;
+      const ex = end.x * scale + marginOffset;
+      const ey = end.y * scale;
+      const cp = controlPoint
+        ? { x: controlPoint.x * scale + marginOffset, y: controlPoint.y * scale }
+        : undefined;
+
+      ctx.save();
+      ctx.strokeStyle = color;
+      ctx.fillStyle = color;
+      ctx.lineWidth = strokeW * scale;
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+
+      // Set line style
+      if (lineStyle === "dashed") {
+        ctx.setLineDash([10 * scale, 5 * scale]);
+      } else if (lineStyle === "dotted") {
+        ctx.setLineDash([2 * scale, 4 * scale]);
+      }
+
+      if (isPreview) {
+        ctx.globalAlpha = 0.6;
+      }
+
+      // Draw the line
+      ctx.beginPath();
+      ctx.moveTo(sx, sy);
+
+      if (curveStyle === "curved" || curveStyle === "bezier") {
+        // Use control point or auto-calculate for smooth curve
+        const midX = (sx + ex) / 2;
+        const midY = (sy + ey) / 2;
+        const dx = ex - sx;
+        const dy = ey - sy;
+        const perpX = -dy * 0.3;
+        const perpY = dx * 0.3;
+        const autoCP = cp || { x: midX + perpX, y: midY + perpY };
+        ctx.quadraticCurveTo(autoCP.x, autoCP.y, ex, ey);
+      } else {
+        ctx.lineTo(ex, ey);
+      }
+      ctx.stroke();
+
+      // Calculate angle for arrow heads
+      let endAngle: number;
+      if (curveStyle !== "straight" && !cp) {
+        const midX = (sx + ex) / 2;
+        const midY = (sy + ey) / 2;
+        const dx = ex - sx;
+        const dy = ey - sy;
+        const perpX = -dy * 0.3;
+        const perpY = dx * 0.3;
+        const ctrlX = midX + perpX;
+        const ctrlY = midY + perpY;
+        endAngle = Math.atan2(ey - ctrlY, ex - ctrlX);
+      } else if (cp) {
+        endAngle = Math.atan2(ey - cp.y, ex - cp.x);
+      } else {
+        endAngle = Math.atan2(ey - sy, ex - sx);
+      }
+      const startAngle = Math.atan2(sy - ey, sx - ex);
+
+      ctx.setLineDash([]);
+
+      // Draw head
+      const headSize = strokeW * scale * 3;
+      if (headStyle === "arrow") {
+        ctx.beginPath();
+        ctx.moveTo(ex, ey);
+        ctx.lineTo(
+          ex - headSize * Math.cos(endAngle - Math.PI / 6),
+          ey - headSize * Math.sin(endAngle - Math.PI / 6)
+        );
+        ctx.lineTo(
+          ex - headSize * Math.cos(endAngle + Math.PI / 6),
+          ey - headSize * Math.sin(endAngle + Math.PI / 6)
+        );
+        ctx.closePath();
+        ctx.fill();
+      } else if (headStyle === "circle") {
+        ctx.beginPath();
+        ctx.arc(ex, ey, headSize / 2, 0, Math.PI * 2);
+        ctx.fill();
+      } else if (headStyle === "diamond") {
+        ctx.beginPath();
+        ctx.moveTo(ex + headSize * Math.cos(endAngle), ey + headSize * Math.sin(endAngle));
+        ctx.lineTo(ex + headSize * Math.cos(endAngle + Math.PI / 2) * 0.6, ey + headSize * Math.sin(endAngle + Math.PI / 2) * 0.6);
+        ctx.lineTo(ex - headSize * Math.cos(endAngle), ey - headSize * Math.sin(endAngle));
+        ctx.lineTo(ex + headSize * Math.cos(endAngle - Math.PI / 2) * 0.6, ey + headSize * Math.sin(endAngle - Math.PI / 2) * 0.6);
+        ctx.closePath();
+        ctx.fill();
+      }
+
+      // Draw tail
+      if (tailStyle === "arrow") {
+        ctx.beginPath();
+        ctx.moveTo(sx, sy);
+        ctx.lineTo(
+          sx - headSize * Math.cos(startAngle - Math.PI / 6),
+          sy - headSize * Math.sin(startAngle - Math.PI / 6)
+        );
+        ctx.lineTo(
+          sx - headSize * Math.cos(startAngle + Math.PI / 6),
+          sy - headSize * Math.sin(startAngle + Math.PI / 6)
+        );
+        ctx.closePath();
+        ctx.fill();
+      } else if (tailStyle === "circle") {
+        ctx.beginPath();
+        ctx.arc(sx, sy, headSize / 2, 0, Math.PI * 2);
+        ctx.fill();
+      } else if (tailStyle === "diamond") {
+        ctx.beginPath();
+        ctx.moveTo(sx + headSize * Math.cos(startAngle), sy + headSize * Math.sin(startAngle));
+        ctx.lineTo(sx + headSize * Math.cos(startAngle + Math.PI / 2) * 0.6, sy + headSize * Math.sin(startAngle + Math.PI / 2) * 0.6);
+        ctx.lineTo(sx - headSize * Math.cos(startAngle), sy - headSize * Math.sin(startAngle));
+        ctx.lineTo(sx + headSize * Math.cos(startAngle - Math.PI / 2) * 0.6, sy + headSize * Math.sin(startAngle - Math.PI / 2) * 0.6);
+        ctx.closePath();
+        ctx.fill();
+      }
+
+      ctx.restore();
+    },
+    [scale, marginOffset]
+  );
+
   // Set up canvas with proper DPI scaling
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -184,6 +338,22 @@ export function AnnotationCanvas({
     // Draw existing rect annotations
     rectAnnotations.forEach((annotation) => {
       drawRect(ctx, annotation.rect, annotation.color, 0.3);
+    });
+
+    // Draw existing arrow annotations
+    arrowAnnotations.forEach((annotation) => {
+      drawArrow(
+        ctx,
+        annotation.start,
+        annotation.end,
+        annotation.color,
+        annotation.strokeWidth,
+        annotation.lineStyle,
+        annotation.curveStyle,
+        annotation.headStyle,
+        annotation.tailStyle,
+        annotation.controlPoint
+      );
     });
 
     // Draw existing highlighter ink annotations (below regular ink)
@@ -226,7 +396,24 @@ export function AnnotationCanvas({
       };
       drawRect(ctx, rect, currentColor, 0.3, true);
     }
-  }, [inkAnnotations, highlighterInkAnnotations, rectAnnotations, currentTool, currentColor, strokeWidth, highlightOpacity, drawStroke, drawRect, rectPreview]);
+
+    // Draw arrow preview
+    if (arrowPreview) {
+      drawArrow(
+        ctx,
+        arrowPreview.start,
+        arrowPreview.end,
+        currentColor,
+        strokeWidth,
+        arrowSettings.lineStyle,
+        arrowSettings.curveStyle,
+        arrowSettings.headStyle,
+        arrowSettings.tailStyle,
+        arrowPreview.controlPoint,
+        true
+      );
+    }
+  }, [inkAnnotations, highlighterInkAnnotations, rectAnnotations, arrowAnnotations, currentTool, currentColor, strokeWidth, highlightOpacity, arrowSettings, drawStroke, drawRect, drawArrow, rectPreview, arrowPreview]);
 
   // Re-render when annotations change
   useEffect(() => {
@@ -236,7 +423,7 @@ export function AnnotationCanvas({
   // Handle pointer events
   const handlePointerDown = useCallback(
     (e: React.PointerEvent) => {
-      const drawingTools = ["pen", "highlighter", "eraser", "rect"];
+      const drawingTools = ["pen", "highlighter", "eraser", "rect", "arrow"];
       if (!drawingTools.includes(currentTool)) return;
 
       e.preventDefault();
@@ -257,6 +444,11 @@ export function AnnotationCanvas({
           startY: pdfPoint.y,
           endX: pdfPoint.x,
           endY: pdfPoint.y,
+        });
+      } else if (currentTool === "arrow") {
+        setArrowPreview({
+          start: pdfPoint,
+          end: pdfPoint,
         });
       } else {
         const point: StrokePoint = {
@@ -285,6 +477,11 @@ export function AnnotationCanvas({
         setRectPreview((prev) =>
           prev ? { ...prev, endX: pdfPoint.x, endY: pdfPoint.y } : null
         );
+      } else if (currentTool === "arrow") {
+        setArrowPreview((prev) =>
+          prev ? { ...prev, end: pdfPoint } : null
+        );
+        renderAnnotations();
       } else {
         const point: StrokePoint = {
           x: pdfPoint.x,
@@ -327,6 +524,32 @@ export function AnnotationCanvas({
           addAnnotation(annotation);
         }
         setRectPreview(null);
+      } else if (currentTool === "arrow" && arrowPreview) {
+        // Create arrow annotation
+        const dx = arrowPreview.end.x - arrowPreview.start.x;
+        const dy = arrowPreview.end.y - arrowPreview.start.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+
+        if (distance > 10 / scale) {
+          const annotation: ArrowAnnotation = {
+            id: crypto.randomUUID(),
+            type: "arrow",
+            pageNumber,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+            color: currentColor,
+            start: arrowPreview.start,
+            end: arrowPreview.end,
+            strokeWidth,
+            lineStyle: arrowSettings.lineStyle,
+            curveStyle: arrowSettings.curveStyle,
+            headStyle: arrowSettings.headStyle,
+            tailStyle: arrowSettings.tailStyle,
+            controlPoint: arrowPreview.controlPoint,
+          };
+          addAnnotation(annotation);
+        }
+        setArrowPreview(null);
       } else if (currentStrokeRef.current.length >= 2) {
         const stroke: Stroke = {
           points: currentStrokeRef.current.map((p) => ({ x: p.x, y: p.y })),
@@ -364,17 +587,18 @@ export function AnnotationCanvas({
       currentStrokeRef.current = [];
       renderAnnotations();
     },
-    [currentTool, currentColor, strokeWidth, highlightOpacity, pageNumber, addAnnotation, renderAnnotations, rectPreview, scale]
+    [currentTool, currentColor, strokeWidth, highlightOpacity, pageNumber, addAnnotation, renderAnnotations, rectPreview, arrowPreview, arrowSettings, scale]
   );
 
   const handlePointerCancel = useCallback(() => {
     isDrawingRef.current = false;
     currentStrokeRef.current = [];
     setRectPreview(null);
+    setArrowPreview(null);
     renderAnnotations();
   }, [renderAnnotations]);
 
-  const isInteractive = ["pen", "highlighter", "eraser", "rect"].includes(currentTool);
+  const isInteractive = ["pen", "highlighter", "eraser", "rect", "arrow"].includes(currentTool);
 
   return (
     <canvas

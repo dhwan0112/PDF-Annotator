@@ -33,6 +33,7 @@ interface TabStoreState {
   moveTabToGroup: (tabId: string, groupId: string | null) => void;
   getTabsInGroup: (groupId: string | null) => TabState[];
   closeGroupTabs: (groupId: string) => void;
+  reorderTab: (tabId: string, targetTabId: string, position: "before" | "after") => void;
 }
 
 function generateTabId(): string {
@@ -165,6 +166,29 @@ export const useTabStore = create<TabStoreState>()(
           tabs: newTabs,
           activeTabId: newActiveTabId,
         });
+      },
+
+      reorderTab: (tabId, targetTabId, position) => {
+        const { tabs } = get();
+        const tabIndex = tabs.findIndex((t) => t.id === tabId);
+        const targetIndex = tabs.findIndex((t) => t.id === targetTabId);
+
+        if (tabIndex === -1 || targetIndex === -1 || tabIndex === targetIndex) return;
+
+        const newTabs = [...tabs];
+        const [movedTab] = newTabs.splice(tabIndex, 1);
+
+        // Calculate new index after removal
+        let newIndex = targetIndex;
+        if (tabIndex < targetIndex) {
+          newIndex = targetIndex - 1;
+        }
+        if (position === "after") {
+          newIndex += 1;
+        }
+
+        newTabs.splice(newIndex, 0, movedTab);
+        set({ tabs: newTabs });
       },
     }),
     {

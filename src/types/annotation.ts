@@ -70,6 +70,12 @@ export interface ArrowAnnotation extends BaseAnnotation {
   start: Point;
   end: Point;
   strokeWidth: number;
+  lineStyle: "solid" | "dashed" | "dotted";
+  curveStyle: "straight" | "curved" | "bezier";
+  headStyle: "arrow" | "circle" | "diamond" | "none";
+  tailStyle: "none" | "arrow" | "circle" | "diamond";
+  // Control point for bezier curves (optional)
+  controlPoint?: Point;
 }
 
 export interface TextStyle {

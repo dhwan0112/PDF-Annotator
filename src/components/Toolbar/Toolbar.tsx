@@ -276,12 +276,31 @@ export function Toolbar() {
                   setSettingsPopoverTool(id);
                   setSettingsAnchorEl(toolButtonRefs.current.get(id) || null);
                 }}
+                onPointerDown={(e) => {
+                  // Show settings on stylus pen long-press or barrel button
+                  if (e.pointerType === "pen") {
+                    // If pen button is pressed (buttons === 2 or 32), show settings immediately
+                    if (e.buttons === 2 || e.buttons === 32) {
+                      e.preventDefault();
+                      setCurrentTool(id);
+                      setSettingsPopoverTool(id);
+                      setSettingsAnchorEl(toolButtonRefs.current.get(id) || null);
+                    } else {
+                      // For regular pen tap, select tool and show settings for drawing tools
+                      setCurrentTool(id);
+                      if (id !== "select") {
+                        setSettingsPopoverTool(id);
+                        setSettingsAnchorEl(toolButtonRefs.current.get(id) || null);
+                      }
+                    }
+                  }
+                }}
                 className={`p-2 rounded transition-colors relative ${
                   currentTool === id
                     ? "bg-blue-500 text-white"
                     : "text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700"
                 }`}
-                title={`${label} (Right-click for settings)`}
+                title={`${label} (Right-click or stylus for settings)`}
               >
                 <Icon className="w-5 h-5" />
                 {/* Color indicator dot */}
