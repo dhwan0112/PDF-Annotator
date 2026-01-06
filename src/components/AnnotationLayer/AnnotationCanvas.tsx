@@ -97,6 +97,23 @@ export function AnnotationCanvas({
     [scale, marginOffset]
   );
 
+  // Set up canvas with proper DPI scaling
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = width * dpr;
+    canvas.height = height * dpr;
+    canvas.style.width = `${width}px`;
+    canvas.style.height = `${height}px`;
+
+    const ctx = canvas.getContext("2d");
+    if (ctx) {
+      ctx.scale(dpr, dpr);
+    }
+  }, [width, height]);
+
   // Render all annotations
   const renderAnnotations = useCallback(() => {
     const canvas = canvasRef.current;
@@ -105,8 +122,11 @@ export function AnnotationCanvas({
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    // Clear canvas
+    // Clear canvas (account for DPI scaling)
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.restore();
 
     // Draw existing ink annotations
     inkAnnotations.forEach((annotation) => {
@@ -232,12 +252,10 @@ export function AnnotationCanvas({
   return (
     <canvas
       ref={canvasRef}
-      width={width}
-      height={height}
       className={`absolute top-0 left-0 ${
-        isInteractive ? "cursor-crosshair" : "pointer-events-none"
+        isInteractive ? "cursor-crosshair pointer-events-auto" : "pointer-events-none"
       }`}
-      style={{ touchAction: "none", zIndex: 4 }}
+      style={{ touchAction: "none", zIndex: 4, width, height }}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}

@@ -45,7 +45,7 @@ export function NoteCreator({ pageNumber, scale, width, height, marginOffset = 0
 
   return (
     <div
-      className="absolute inset-0 cursor-crosshair"
+      className="absolute inset-0 cursor-crosshair pointer-events-auto"
       style={{ width, height, zIndex: 3 }}
       onClick={handleClick}
     />
