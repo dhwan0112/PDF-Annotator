@@ -462,7 +462,13 @@ export function TabBar({ onTabChange }: TabBarProps) {
   };
 
   return (
-    <div className="flex items-center bg-gray-200 dark:bg-gray-900 border-b border-gray-300 dark:border-gray-700 overflow-x-auto">
+    <div
+      className="flex items-center bg-gray-200 dark:bg-gray-900 border-b border-gray-300 dark:border-gray-700 overflow-x-auto"
+      onDragOver={(e) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = "move";
+      }}
+    >
       {/* Grouped tabs */}
       {studyGroups.map((group) => renderGroupHeader(group))}
 
