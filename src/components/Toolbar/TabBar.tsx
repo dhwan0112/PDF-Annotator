@@ -164,9 +164,9 @@ export function TabBar({ onTabChange }: TabBarProps) {
         onContextMenu={(e) => handleContextMenu(e, tab.id)}
         className={`group flex items-center gap-1.5 px-2.5 py-1.5 cursor-pointer min-w-0 max-w-[180px] transition-colors ${
           isActive
-            ? "bg-white dark:bg-gray-800 rounded-t-lg border-t border-l border-r -mb-px"
-            : "hover:bg-gray-50 dark:hover:bg-gray-800 rounded-t-md mt-1 mx-0.5 border border-transparent"
-        } ${!isActive && !groupColor ? "bg-gray-100 dark:bg-gray-850" : ""}`}
+            ? "bg-gray-100 dark:bg-gray-800 rounded-t-lg border-t border-l border-r border-gray-300 dark:border-gray-600 -mb-px"
+            : "hover:bg-gray-300 dark:hover:bg-gray-700 rounded-t-md mt-1 mx-0.5 border border-transparent"
+        } ${!isActive && !groupColor ? "bg-gray-300/50 dark:bg-gray-800/50" : ""}`}
         style={isActive ? borderStyle : bgStyle}
         title={tab.filePath}
       >
@@ -182,7 +182,7 @@ export function TabBar({ onTabChange }: TabBarProps) {
         </span>
         <button
           onClick={(e) => handleCloseTab(e, tab.id)}
-          className={`p-0.5 rounded hover:bg-gray-300 dark:hover:bg-gray-600 ${
+          className={`p-0.5 rounded hover:bg-gray-400 dark:hover:bg-gray-600 ${
             isActive ? "opacity-100" : "opacity-0 group-hover:opacity-100"
           }`}
           title="Close tab"
@@ -294,8 +294,8 @@ export function TabBar({ onTabChange }: TabBarProps) {
       {/* Ungrouped tabs */}
       {ungroupedTabs.map((tab) => renderTab(tab))}
 
-      {/* Empty space filler */}
-      <div className="flex-1 border-b border-gray-300 dark:border-gray-600" />
+      {/* Empty space filler - matches tab bar background */}
+      <div className="flex-1 min-h-[36px]" />
 
       {/* Context menu */}
       {contextMenu && (
