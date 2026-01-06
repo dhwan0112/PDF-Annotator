@@ -184,3 +184,9 @@ body {
 .thumbnail-item.active {
   ring: 2px solid var(--color-primary);
 }
+
+/* Tab dragging cursor override */
+body.tab-dragging,
+body.tab-dragging * {
+  cursor: grabbing !important;
+}
