@@ -1,0 +1,1 @@
+export { exportAnnotationsToPdf } from "./pdfExport";
