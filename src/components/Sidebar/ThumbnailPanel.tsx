@@ -7,7 +7,7 @@ interface ThumbnailPanelProps {
 }
 
 export function ThumbnailPanel({ pdfDocument }: ThumbnailPanelProps) {
-  const { currentPage, setCurrentPage, totalPages } = usePdfStore();
+  const { currentPage, setCurrentPage } = usePdfStore();
 
   if (!pdfDocument) {
     return (
@@ -17,11 +17,14 @@ export function ThumbnailPanel({ pdfDocument }: ThumbnailPanelProps) {
     );
   }
 
+  // Use pdfDocument.numPages directly to avoid sync issues with store
+  const numPages = pdfDocument.numPages;
+
   return (
     <div className="flex flex-col gap-2">
-      {Array.from({ length: totalPages }, (_, i) => i + 1).map((pageNum) => (
+      {Array.from({ length: numPages }, (_, i) => i + 1).map((pageNum) => (
         <ThumbnailItem
-          key={pageNum}
+          key={`${pdfDocument.fingerprints[0]}-${pageNum}`}
           pdfDocument={pdfDocument}
           pageNumber={pageNum}
           isActive={pageNum === currentPage}
@@ -47,53 +50,74 @@ const ThumbnailItem = memo(function ThumbnailItem({
 }: ThumbnailItemProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [rendered, setRendered] = useState(false);
-  const observerRef = useRef<IntersectionObserver | null>(null);
+  const [isVisible, setIsVisible] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Lazy load thumbnails using Intersection Observer
+  // Intersection Observer to detect visibility
   useEffect(() => {
-    if (!containerRef.current) return;
+    const container = containerRef.current;
+    if (!container) return;
 
-    observerRef.current = new IntersectionObserver(
+    const observer = new IntersectionObserver(
       (entries) => {
-        if (entries[0].isIntersecting && !rendered) {
-          renderThumbnail();
+        if (entries[0].isIntersecting) {
+          setIsVisible(true);
+          observer.disconnect(); // Only need to observe until visible
         }
       },
       { threshold: 0.1 }
     );
 
-    observerRef.current.observe(containerRef.current);
+    observer.observe(container);
 
     return () => {
-      observerRef.current?.disconnect();
+      observer.disconnect();
     };
-  }, [rendered]);
+  }, []);
 
-  const renderThumbnail = async () => {
-    if (!canvasRef.current || rendered) return;
+  // Render thumbnail when visible
+  useEffect(() => {
+    if (!isVisible || rendered) return;
 
-    try {
-      const page = await pdfDocument.getPage(pageNumber);
-      const viewport = page.getViewport({ scale: 0.2 });
-      const canvas = canvasRef.current;
-      const context = canvas.getContext("2d");
+    const canvas = canvasRef.current;
+    if (!canvas) return;
 
-      if (!context) return;
+    let cancelled = false;
 
-      canvas.width = viewport.width;
-      canvas.height = viewport.height;
+    const renderThumbnail = async () => {
+      try {
+        const page = await pdfDocument.getPage(pageNumber);
+        if (cancelled) return;
 
-      await page.render({
-        canvasContext: context,
-        viewport,
-      }).promise;
+        const viewport = page.getViewport({ scale: 0.2 });
+        const context = canvas.getContext("2d");
 
-      setRendered(true);
-    } catch (err) {
-      console.error("Error rendering thumbnail:", err);
-    }
-  };
+        if (!context || cancelled) return;
+
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+
+        await page.render({
+          canvasContext: context,
+          viewport,
+        }).promise;
+
+        if (!cancelled) {
+          setRendered(true);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          console.error("Error rendering thumbnail:", err);
+        }
+      }
+    };
+
+    renderThumbnail();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isVisible, rendered, pdfDocument, pageNumber]);
 
   return (
     <div

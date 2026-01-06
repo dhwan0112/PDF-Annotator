@@ -31,7 +31,7 @@ export function TabBar({ onTabChange }: TabBarProps) {
   };
 
   return (
-    <div className="flex items-center bg-gray-50 dark:bg-gray-850 border-b border-gray-200 dark:border-gray-700 overflow-x-auto">
+    <div className="flex items-center bg-gray-200 dark:bg-gray-900 border-b border-gray-300 dark:border-gray-700 overflow-x-auto">
       {tabs.map((tab) => {
         const isActive = tab.id === activeTabId;
         const fileName = tab.filePath.split(/[\\/]/).pop() || "Untitled";
@@ -42,15 +42,15 @@ export function TabBar({ onTabChange }: TabBarProps) {
             key={tab.id}
             onClick={() => handleTabClick(tab)}
             onMouseDown={(e) => handleMiddleClick(e, tab.id)}
-            className={`group flex items-center gap-2 px-3 py-2 cursor-pointer border-r border-gray-200 dark:border-gray-700 min-w-0 max-w-[200px] ${
+            className={`group flex items-center gap-2 px-3 py-1.5 cursor-pointer min-w-0 max-w-[200px] transition-colors ${
               isActive
-                ? "bg-white dark:bg-gray-800 border-b-2 border-b-blue-500"
-                : "bg-gray-100 dark:bg-gray-900 hover:bg-gray-200 dark:hover:bg-gray-800"
+                ? "bg-white dark:bg-gray-800 rounded-t-lg border-t border-l border-r border-gray-300 dark:border-gray-600 -mb-px"
+                : "bg-gray-100 dark:bg-gray-850 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-t-md mt-1 mx-0.5 border border-transparent"
             }`}
             title={tab.filePath}
           >
-            <FileText className="w-4 h-4 flex-shrink-0 text-gray-500 dark:text-gray-400" />
-            <span className="truncate text-sm text-gray-700 dark:text-gray-300">
+            <FileText className={`w-4 h-4 flex-shrink-0 ${isActive ? "text-blue-500" : "text-gray-500 dark:text-gray-400"}`} />
+            <span className={`truncate text-sm ${isActive ? "text-gray-900 dark:text-gray-100 font-medium" : "text-gray-600 dark:text-gray-400"}`}>
               {displayName}
             </span>
             <button
@@ -60,11 +60,13 @@ export function TabBar({ onTabChange }: TabBarProps) {
               }`}
               title="Close tab"
             >
-              <X className="w-3.5 h-3.5 text-gray-500 dark:text-gray-400" />
+              <X className="w-3.5 h-3.5 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200" />
             </button>
           </div>
         );
       })}
+      {/* Empty space filler */}
+      <div className="flex-1 border-b border-gray-300 dark:border-gray-600" />
     </div>
   );
 }
