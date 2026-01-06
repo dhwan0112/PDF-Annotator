@@ -50,49 +50,34 @@ const ThumbnailItem = memo(function ThumbnailItem({
 }: ThumbnailItemProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [rendered, setRendered] = useState(false);
-  const [isVisible, setIsVisible] = useState(false);
+  const [error, setError] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const renderingRef = useRef(false);
 
-  // Intersection Observer to detect visibility
+  // Render thumbnail - start immediately for first few pages, use IntersectionObserver for rest
   useEffect(() => {
-    const container = containerRef.current;
-    if (!container) return;
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries[0].isIntersecting) {
-          setIsVisible(true);
-          observer.disconnect(); // Only need to observe until visible
-        }
-      },
-      { threshold: 0.1 }
-    );
-
-    observer.observe(container);
-
-    return () => {
-      observer.disconnect();
-    };
-  }, []);
-
-  // Render thumbnail when visible
-  useEffect(() => {
-    if (!isVisible || rendered) return;
+    if (rendered || renderingRef.current || error) return;
 
     const canvas = canvasRef.current;
-    if (!canvas) return;
+    const container = containerRef.current;
+    if (!canvas || !container) return;
 
-    let cancelled = false;
+    // For first 5 pages, render immediately; otherwise use IntersectionObserver
+    const shouldRenderImmediately = pageNumber <= 5;
 
-    const renderThumbnail = async () => {
+    const doRender = async () => {
+      if (renderingRef.current) return;
+      renderingRef.current = true;
+
       try {
         const page = await pdfDocument.getPage(pageNumber);
-        if (cancelled) return;
-
         const viewport = page.getViewport({ scale: 0.2 });
         const context = canvas.getContext("2d");
 
-        if (!context || cancelled) return;
+        if (!context) {
+          setError(true);
+          return;
+        }
 
         canvas.width = viewport.width;
         canvas.height = viewport.height;
@@ -102,22 +87,36 @@ const ThumbnailItem = memo(function ThumbnailItem({
           viewport,
         }).promise;
 
-        if (!cancelled) {
-          setRendered(true);
-        }
+        setRendered(true);
       } catch (err) {
-        if (!cancelled) {
-          console.error("Error rendering thumbnail:", err);
-        }
+        console.error("Error rendering thumbnail:", pageNumber, err);
+        setError(true);
+      } finally {
+        renderingRef.current = false;
       }
     };
 
-    renderThumbnail();
+    if (shouldRenderImmediately) {
+      doRender();
+    } else {
+      // Use IntersectionObserver for lazy loading
+      const observer = new IntersectionObserver(
+        (entries) => {
+          if (entries[0].isIntersecting) {
+            observer.disconnect();
+            doRender();
+          }
+        },
+        { threshold: 0.1, rootMargin: "100px" }
+      );
 
-    return () => {
-      cancelled = true;
-    };
-  }, [isVisible, rendered, pdfDocument, pageNumber]);
+      observer.observe(container);
+
+      return () => {
+        observer.disconnect();
+      };
+    }
+  }, [pdfDocument, pageNumber, rendered, error]);
 
   return (
     <div
@@ -129,15 +128,26 @@ const ThumbnailItem = memo(function ThumbnailItem({
           : "border-transparent hover:border-gray-300 dark:hover:border-gray-600"
       }`}
     >
-      <div className="relative bg-white shadow-sm rounded overflow-hidden">
+      <div className="relative bg-gray-200 dark:bg-gray-700 shadow-sm rounded overflow-hidden">
         <canvas
           ref={canvasRef}
           className="w-full h-auto"
-          style={{ aspectRatio: "8.5/11" }}
+          style={{ aspectRatio: "8.5/11", display: rendered ? "block" : "none" }}
         />
-        {!rendered && (
-          <div className="absolute inset-0 flex items-center justify-center bg-gray-100 dark:bg-gray-700">
+        {!rendered && !error && (
+          <div
+            className="flex items-center justify-center bg-gray-100 dark:bg-gray-700"
+            style={{ aspectRatio: "8.5/11" }}
+          >
             <div className="w-6 h-6 border-2 border-gray-300 border-t-blue-500 rounded-full animate-spin" />
+          </div>
+        )}
+        {error && (
+          <div
+            className="flex items-center justify-center bg-gray-200 dark:bg-gray-600 text-gray-500 dark:text-gray-400 text-xs"
+            style={{ aspectRatio: "8.5/11" }}
+          >
+            Failed
           </div>
         )}
       </div>
