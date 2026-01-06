@@ -1,6 +1,6 @@
 import { useRef, useState, useCallback, useEffect } from "react";
 import { useMindMapStore } from "../../stores";
-import type { MindMapNode } from "../../types";
+import type { MindMapNode, Annotation } from "../../types";
 import {
   Plus,
   Trash2,
@@ -11,10 +11,14 @@ import {
   ArrowLeft,
   Edit2,
   X,
+  PanelRightOpen,
+  PanelRightClose,
 } from "lucide-react";
+import { AnnotationBrowser } from "./AnnotationBrowser";
 
 interface MindMapCanvasProps {
   mindMapId: string;
+  studyGroupId: string;
   onClose: () => void;
 }
 
@@ -23,7 +27,7 @@ const NODE_COLORS = [
   "#fed7aa", "#cffafe", "#fecaca", "#d9f99d", "#f5d0fe",
 ];
 
-export function MindMapCanvas({ mindMapId, onClose }: MindMapCanvasProps) {
+export function MindMapCanvas({ mindMapId, studyGroupId, onClose }: MindMapCanvasProps) {
   const canvasRef = useRef<HTMLDivElement>(null);
   const {
     getMindMap,
@@ -35,6 +39,7 @@ export function MindMapCanvas({ mindMapId, onClose }: MindMapCanvasProps) {
     deleteEdge,
     setCanvasZoom,
     setCanvasPan,
+    importAnnotationAsNode,
   } = useMindMapStore();
 
   const mindMap = getMindMap(mindMapId);
@@ -48,6 +53,7 @@ export function MindMapCanvas({ mindMapId, onClose }: MindMapCanvasProps) {
   const [editingNodeId, setEditingNodeId] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState("");
   const [editContent, setEditContent] = useState("");
+  const [showAnnotationBrowser, setShowAnnotationBrowser] = useState(false);
 
   if (!mindMap) {
     return (
@@ -160,6 +166,72 @@ export function MindMapCanvas({ mindMapId, onClose }: MindMapCanvasProps) {
     setCanvasPan(mindMapId, 0, 0);
   };
 
+  const handleAddAnnotationToMindMap = (annotation: Annotation, documentId: string, documentName: string) => {
+    const rect = canvasRef.current?.getBoundingClientRect();
+    if (!rect || !mindMap) return;
+
+    // Calculate position for new node (slightly offset from center or last added)
+    const nodeCount = mindMap.nodes.length;
+    const offsetX = (nodeCount % 5) * 50;
+    const offsetY = Math.floor(nodeCount / 5) * 50;
+    const x = (rect.width / 2 - mindMap.panX + offsetX) / mindMap.zoom;
+    const y = (rect.height / 2 - mindMap.panY + offsetY) / mindMap.zoom;
+
+    // Get content based on annotation type
+    let title = "";
+    let content = "";
+
+    switch (annotation.type) {
+      case "highlight":
+      case "underline":
+      case "strikeout":
+        title = annotation.text?.slice(0, 50) || "Highlighted text";
+        content = annotation.text || "";
+        break;
+      case "note":
+        title = "Note";
+        content = annotation.content || "";
+        break;
+      case "textbox":
+        title = "Text Box";
+        content = annotation.content || "";
+        break;
+      case "ink":
+        title = "Drawing";
+        content = `${annotation.strokes.length} stroke(s) from ${documentName}`;
+        break;
+      case "highlighterInk":
+        title = "Highlighter Mark";
+        content = `Highlighter drawing from ${documentName}`;
+        break;
+      case "rect":
+        title = "Rectangle";
+        content = `Rectangle annotation from ${documentName}`;
+        break;
+      case "arrow":
+        title = "Arrow";
+        content = `Arrow annotation from ${documentName}`;
+        break;
+      default:
+        title = "Annotation";
+        content = `From ${documentName}`;
+    }
+
+    // Add page info to content
+    content += `\n\nPage ${annotation.pageNumber}`;
+
+    importAnnotationAsNode(
+      mindMapId,
+      annotation.id,
+      documentId,
+      title,
+      content,
+      annotation.color || NODE_COLORS[Math.floor(Math.random() * NODE_COLORS.length)],
+      x,
+      y
+    );
+  };
+
   const handleWheel = useCallback(
     (e: WheelEvent) => {
       if (e.ctrlKey || e.metaKey) {
@@ -180,26 +252,43 @@ export function MindMapCanvas({ mindMapId, onClose }: MindMapCanvasProps) {
   }, [handleWheel]);
 
   return (
-    <div className="flex-1 flex flex-col bg-gray-100 dark:bg-gray-900 h-full">
-      {/* Toolbar */}
-      <div className="flex items-center px-4 py-2 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 gap-2">
-        <button
-          onClick={onClose}
-          className="p-2 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-400"
-          title="Back"
-        >
-          <ArrowLeft className="w-4 h-4" />
-        </button>
-        <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300 flex-1">
-          {mindMap.name}
-        </h2>
-        <button
-          onClick={handleAddNode}
-          className="p-2 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-400"
-          title="Add node"
-        >
-          <Plus className="w-4 h-4" />
-        </button>
+    <div className="flex-1 flex bg-gray-100 dark:bg-gray-900 h-full">
+      {/* Main content */}
+      <div className="flex-1 flex flex-col">
+        {/* Toolbar */}
+        <div className="flex items-center px-4 py-2 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 gap-2">
+          <button
+            onClick={onClose}
+            className="p-2 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-400"
+            title="Back"
+          >
+            <ArrowLeft className="w-4 h-4" />
+          </button>
+          <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300 flex-1">
+            {mindMap.name}
+          </h2>
+          <button
+            onClick={handleAddNode}
+            className="p-2 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-400"
+            title="Add empty node"
+          >
+            <Plus className="w-4 h-4" />
+          </button>
+          <button
+            onClick={() => setShowAnnotationBrowser(!showAnnotationBrowser)}
+            className={`p-2 rounded ${
+              showAnnotationBrowser
+                ? "bg-blue-100 dark:bg-blue-900/30 text-blue-600"
+                : "hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-400"
+            }`}
+            title="Import from annotations"
+          >
+            {showAnnotationBrowser ? (
+              <PanelRightClose className="w-4 h-4" />
+            ) : (
+              <PanelRightOpen className="w-4 h-4" />
+            )}
+          </button>
         {selectedNodeId && (
           <>
             <button
@@ -432,16 +521,35 @@ export function MindMapCanvas({ mindMapId, onClose }: MindMapCanvasProps) {
           <div className="absolute inset-0 flex items-center justify-center">
             <div className="text-center text-gray-400 dark:text-gray-500">
               <p className="mb-2">Empty mind map</p>
-              <button
-                onClick={handleAddNode}
-                className="px-3 py-1 text-sm bg-blue-500 text-white rounded hover:bg-blue-600"
-              >
-                Add first node
-              </button>
+              <p className="text-xs mb-3">Add nodes manually or import from annotations</p>
+              <div className="flex gap-2 justify-center">
+                <button
+                  onClick={handleAddNode}
+                  className="px-3 py-1 text-sm bg-blue-500 text-white rounded hover:bg-blue-600"
+                >
+                  Add node
+                </button>
+                <button
+                  onClick={() => setShowAnnotationBrowser(true)}
+                  className="px-3 py-1 text-sm bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-300 dark:hover:bg-gray-600"
+                >
+                  Import annotations
+                </button>
+              </div>
             </div>
           </div>
         )}
+        </div>
       </div>
+
+      {/* Annotation Browser Sidebar */}
+      {showAnnotationBrowser && (
+        <AnnotationBrowser
+          studyGroupId={studyGroupId}
+          onAddToMindMap={handleAddAnnotationToMindMap}
+          onClose={() => setShowAnnotationBrowser(false)}
+        />
+      )}
     </div>
   );
 }

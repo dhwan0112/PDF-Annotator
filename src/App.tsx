@@ -291,10 +291,15 @@ function App() {
 
   // Get active study group's first mind map for split panel view
   const { activeStudyGroupId } = useStudyGroupStore();
-  const { getMindMapsForGroup } = useMindMapStore();
+  const { getMindMapsForGroup, getMindMap } = useMindMapStore();
   const splitPanelMindMapId = activeStudyGroupId
     ? getMindMapsForGroup(activeStudyGroupId)[0]?.id || null
     : activeMindMapId;
+
+  // Get studyGroupId for standalone mindmap view
+  const activeMindMapStudyGroupId = activeMindMapId
+    ? getMindMap(activeMindMapId)?.studyGroupId || ""
+    : "";
 
   return (
     <div className="flex flex-col h-screen bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100">
@@ -307,7 +312,7 @@ function App() {
         {currentView === "library" ? (
           <Library onOpenDocument={handleOpenDocument} onOpenMindMap={handleOpenMindMap} />
         ) : currentView === "mindmap" && activeMindMapId ? (
-          <MindMapCanvas mindMapId={activeMindMapId} onClose={handleCloseMindMap} />
+          <MindMapCanvas mindMapId={activeMindMapId} studyGroupId={activeMindMapStudyGroupId} onClose={handleCloseMindMap} />
         ) : (
           <>
             <Sidebar pdfDocument={pdfDocument} />
@@ -322,6 +327,7 @@ function App() {
               >
                 <MindMapCanvas
                   mindMapId={splitPanelMindMapId}
+                  studyGroupId={activeStudyGroupId || ""}
                   onClose={toggleMindMapPanel}
                 />
               </div>
