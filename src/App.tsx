@@ -150,6 +150,7 @@ function App() {
             strikeout: "strikeout",
             rect: "rect",
             arrow: "arrow",
+            text: "text",
           };
           if (toolMap[tool]) {
             setCurrentTool(toolMap[tool]);
