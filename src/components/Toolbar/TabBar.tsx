@@ -1,13 +1,48 @@
-import { X, FileText } from "lucide-react";
-import { useTabStore } from "../../stores";
-import type { TabState } from "../../stores";
+import { useState, useRef, useEffect } from "react";
+import { X, FileText, ChevronDown, ChevronRight, FolderPlus } from "lucide-react";
+import { useTabStore, TAB_GROUP_COLORS } from "../../stores";
+import type { TabState, TabGroup } from "../../stores";
 
 interface TabBarProps {
   onTabChange?: (tab: TabState) => void;
 }
 
 export function TabBar({ onTabChange }: TabBarProps) {
-  const { tabs, activeTabId, setActiveTab, closeTab } = useTabStore();
+  const {
+    tabs,
+    groups,
+    activeTabId,
+    setActiveTab,
+    closeTab,
+    createGroup,
+    updateGroup,
+    deleteGroup,
+    toggleGroupCollapsed,
+    moveTabToGroup,
+    closeGroupTabs,
+  } = useTabStore();
+
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; tabId: string } | null>(null);
+  const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
+  const [editingName, setEditingName] = useState("");
+  const editInputRef = useRef<HTMLInputElement>(null);
+
+  // Close context menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = () => setContextMenu(null);
+    if (contextMenu) {
+      document.addEventListener("click", handleClickOutside);
+      return () => document.removeEventListener("click", handleClickOutside);
+    }
+  }, [contextMenu]);
+
+  // Focus input when editing group name
+  useEffect(() => {
+    if (editingGroupId && editInputRef.current) {
+      editInputRef.current.focus();
+      editInputRef.current.select();
+    }
+  }, [editingGroupId]);
 
   if (tabs.length === 0) {
     return null;
@@ -30,43 +65,226 @@ export function TabBar({ onTabChange }: TabBarProps) {
     }
   };
 
+  const handleContextMenu = (e: React.MouseEvent, tabId: string) => {
+    e.preventDefault();
+    setContextMenu({ x: e.clientX, y: e.clientY, tabId });
+  };
+
+  const handleCreateNewGroup = () => {
+    if (!contextMenu) return;
+    const groupId = createGroup("New Group", groups.length % TAB_GROUP_COLORS.length);
+    moveTabToGroup(contextMenu.tabId, groupId);
+    setContextMenu(null);
+    // Start editing the group name
+    setEditingGroupId(groupId);
+    setEditingName("New Group");
+  };
+
+  const handleAddToGroup = (groupId: string) => {
+    if (!contextMenu) return;
+    moveTabToGroup(contextMenu.tabId, groupId);
+    setContextMenu(null);
+  };
+
+  const handleRemoveFromGroup = () => {
+    if (!contextMenu) return;
+    moveTabToGroup(contextMenu.tabId, null);
+    setContextMenu(null);
+  };
+
+  const handleGroupNameSubmit = (groupId: string) => {
+    if (editingName.trim()) {
+      updateGroup(groupId, { name: editingName.trim() });
+    }
+    setEditingGroupId(null);
+  };
+
+  const handleGroupColorChange = (groupId: string, colorIndex: number) => {
+    updateGroup(groupId, { colorIndex });
+  };
+
+  // Organize tabs by group
+  const ungroupedTabs = tabs.filter((t) => !t.groupId);
+  const groupedTabs = new Map<string, TabState[]>();
+  groups.forEach((g) => {
+    groupedTabs.set(g.id, tabs.filter((t) => t.groupId === g.id));
+  });
+
+  const renderTab = (tab: TabState, group?: TabGroup) => {
+    const isActive = tab.id === activeTabId;
+    const fileName = tab.filePath.split(/[\\/]/).pop() || "Untitled";
+    const displayName = fileName.length > 20 ? fileName.substring(0, 17) + "..." : fileName;
+    const groupColor = group ? TAB_GROUP_COLORS[group.colorIndex] : null;
+
+    return (
+      <div
+        key={tab.id}
+        onClick={() => handleTabClick(tab)}
+        onMouseDown={(e) => handleMiddleClick(e, tab.id)}
+        onContextMenu={(e) => handleContextMenu(e, tab.id)}
+        className={`group flex items-center gap-1.5 px-2.5 py-1.5 cursor-pointer min-w-0 max-w-[180px] transition-colors ${
+          isActive
+            ? `bg-white dark:bg-gray-800 rounded-t-lg border-t border-l border-r ${groupColor ? groupColor.border : "border-gray-300 dark:border-gray-600"} -mb-px`
+            : `${groupColor ? groupColor.bg : "bg-gray-100 dark:bg-gray-850"} hover:bg-gray-50 dark:hover:bg-gray-800 rounded-t-md mt-1 mx-0.5 border border-transparent`
+        }`}
+        title={tab.filePath}
+      >
+        <FileText className={`w-3.5 h-3.5 flex-shrink-0 ${isActive ? "text-blue-500" : groupColor ? groupColor.text : "text-gray-500 dark:text-gray-400"}`} />
+        <span className={`truncate text-xs ${isActive ? "text-gray-900 dark:text-gray-100 font-medium" : groupColor ? groupColor.text : "text-gray-600 dark:text-gray-400"}`}>
+          {displayName}
+        </span>
+        <button
+          onClick={(e) => handleCloseTab(e, tab.id)}
+          className={`p-0.5 rounded hover:bg-gray-300 dark:hover:bg-gray-600 ${
+            isActive ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+          }`}
+          title="Close tab"
+        >
+          <X className="w-3 h-3 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200" />
+        </button>
+      </div>
+    );
+  };
+
+  const renderGroupHeader = (group: TabGroup) => {
+    const color = TAB_GROUP_COLORS[group.colorIndex];
+    const tabsInGroup = groupedTabs.get(group.id) || [];
+
+    if (tabsInGroup.length === 0) return null;
+
+    return (
+      <div key={`group-${group.id}`} className="flex items-center">
+        {/* Group header */}
+        <div
+          className={`flex items-center gap-1 px-2 py-1 ${color.bg} rounded-t-md mt-1 cursor-pointer border-b-2 ${color.border}`}
+          onClick={() => toggleGroupCollapsed(group.id)}
+        >
+          {group.collapsed ? (
+            <ChevronRight className={`w-3 h-3 ${color.text}`} />
+          ) : (
+            <ChevronDown className={`w-3 h-3 ${color.text}`} />
+          )}
+          {editingGroupId === group.id ? (
+            <input
+              ref={editInputRef}
+              type="text"
+              value={editingName}
+              onChange={(e) => setEditingName(e.target.value)}
+              onBlur={() => handleGroupNameSubmit(group.id)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") handleGroupNameSubmit(group.id);
+                if (e.key === "Escape") setEditingGroupId(null);
+              }}
+              onClick={(e) => e.stopPropagation()}
+              className={`w-20 px-1 text-xs ${color.text} bg-transparent border-b border-current outline-none`}
+            />
+          ) : (
+            <span
+              className={`text-xs font-medium ${color.text}`}
+              onDoubleClick={(e) => {
+                e.stopPropagation();
+                setEditingGroupId(group.id);
+                setEditingName(group.name);
+              }}
+            >
+              {group.name}
+            </span>
+          )}
+          <span className={`text-xs ${color.text} opacity-60`}>({tabsInGroup.length})</span>
+          {/* Color picker */}
+          <div className="relative group/color ml-1">
+            <div className={`w-3 h-3 rounded-full ${color.bg} border ${color.border}`} />
+            <div className="absolute top-full left-0 mt-1 hidden group-hover/color:flex gap-1 p-1 bg-white dark:bg-gray-800 rounded shadow-lg border border-gray-200 dark:border-gray-600 z-50">
+              {TAB_GROUP_COLORS.map((c, i) => (
+                <button
+                  key={c.name}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleGroupColorChange(group.id, i);
+                  }}
+                  className={`w-4 h-4 rounded-full ${c.bg} border ${c.border} hover:scale-110 transition-transform`}
+                />
+              ))}
+            </div>
+          </div>
+          {/* Close group button */}
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              if (confirm(`Close all ${tabsInGroup.length} tabs in "${group.name}"?`)) {
+                closeGroupTabs(group.id);
+                deleteGroup(group.id);
+              }
+            }}
+            className="ml-1 p-0.5 rounded hover:bg-black/10 dark:hover:bg-white/10 opacity-0 group-hover:opacity-100"
+            title="Close group"
+          >
+            <X className={`w-3 h-3 ${color.text}`} />
+          </button>
+        </div>
+        {/* Group tabs */}
+        {!group.collapsed && tabsInGroup.map((tab) => renderTab(tab, group))}
+      </div>
+    );
+  };
+
   return (
     <div className="flex items-center bg-gray-200 dark:bg-gray-900 border-b border-gray-300 dark:border-gray-700 overflow-x-auto">
-      {tabs.map((tab) => {
-        const isActive = tab.id === activeTabId;
-        const fileName = tab.filePath.split(/[\\/]/).pop() || "Untitled";
-        const displayName = fileName.length > 25 ? fileName.substring(0, 22) + "..." : fileName;
+      {/* Grouped tabs */}
+      {groups.map((group) => renderGroupHeader(group))}
 
-        return (
-          <div
-            key={tab.id}
-            onClick={() => handleTabClick(tab)}
-            onMouseDown={(e) => handleMiddleClick(e, tab.id)}
-            className={`group flex items-center gap-2 px-3 py-1.5 cursor-pointer min-w-0 max-w-[200px] transition-colors ${
-              isActive
-                ? "bg-white dark:bg-gray-800 rounded-t-lg border-t border-l border-r border-gray-300 dark:border-gray-600 -mb-px"
-                : "bg-gray-100 dark:bg-gray-850 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-t-md mt-1 mx-0.5 border border-transparent"
-            }`}
-            title={tab.filePath}
-          >
-            <FileText className={`w-4 h-4 flex-shrink-0 ${isActive ? "text-blue-500" : "text-gray-500 dark:text-gray-400"}`} />
-            <span className={`truncate text-sm ${isActive ? "text-gray-900 dark:text-gray-100 font-medium" : "text-gray-600 dark:text-gray-400"}`}>
-              {displayName}
-            </span>
-            <button
-              onClick={(e) => handleCloseTab(e, tab.id)}
-              className={`p-0.5 rounded hover:bg-gray-300 dark:hover:bg-gray-600 ${
-                isActive ? "opacity-100" : "opacity-0 group-hover:opacity-100"
-              }`}
-              title="Close tab"
-            >
-              <X className="w-3.5 h-3.5 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200" />
-            </button>
-          </div>
-        );
-      })}
+      {/* Ungrouped tabs */}
+      {ungroupedTabs.map((tab) => renderTab(tab))}
+
       {/* Empty space filler */}
       <div className="flex-1 border-b border-gray-300 dark:border-gray-600" />
+
+      {/* Context menu */}
+      {contextMenu && (
+        <div
+          className="fixed bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg shadow-lg py-1 z-50"
+          style={{ left: contextMenu.x, top: contextMenu.y }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button
+            onClick={handleCreateNewGroup}
+            className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+          >
+            <FolderPlus className="w-4 h-4" />
+            Add to new group
+          </button>
+          {groups.length > 0 && (
+            <>
+              <div className="border-t border-gray-200 dark:border-gray-600 my-1" />
+              {groups.map((group) => {
+                const color = TAB_GROUP_COLORS[group.colorIndex];
+                return (
+                  <button
+                    key={group.id}
+                    onClick={() => handleAddToGroup(group.id)}
+                    className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+                  >
+                    <div className={`w-3 h-3 rounded-full ${color.bg} border ${color.border}`} />
+                    {group.name}
+                  </button>
+                );
+              })}
+            </>
+          )}
+          {tabs.find((t) => t.id === contextMenu.tabId)?.groupId && (
+            <>
+              <div className="border-t border-gray-200 dark:border-gray-600 my-1" />
+              <button
+                onClick={handleRemoveFromGroup}
+                className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+              >
+                <X className="w-4 h-4" />
+                Remove from group
+              </button>
+            </>
+          )}
+        </div>
+      )}
     </div>
   );
 }
