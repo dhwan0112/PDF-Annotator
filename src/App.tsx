@@ -179,6 +179,13 @@ function App() {
         return;
       }
 
+      if (shortcutId === "file.save" && currentView === "viewer") {
+        e.preventDefault();
+        // Trigger save button click
+        document.querySelector<HTMLButtonElement>('[title*="Save PDF"]')?.click();
+        return;
+      }
+
       // Only process PDF shortcuts when in viewer
       if (currentView !== "viewer") return;
 
