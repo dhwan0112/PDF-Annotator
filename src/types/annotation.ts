@@ -30,6 +30,12 @@ export interface InkAnnotation extends BaseAnnotation {
   strokes: Stroke[];
 }
 
+export interface HighlighterInkAnnotation extends BaseAnnotation {
+  type: "highlighterInk";
+  strokes: Stroke[];
+  opacity: number;
+}
+
 export interface HighlightAnnotation extends BaseAnnotation {
   type: "highlight";
   rects: Rect[];
@@ -68,6 +74,7 @@ export interface ArrowAnnotation extends BaseAnnotation {
 
 export type Annotation =
   | InkAnnotation
+  | HighlighterInkAnnotation
   | HighlightAnnotation
   | UnderlineAnnotation
   | StrikeoutAnnotation
