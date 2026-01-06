@@ -18,6 +18,8 @@ interface StudyGroupState {
   addDocumentToGroup: (groupId: string, documentId: string) => void;
   removeDocumentFromGroup: (groupId: string, documentId: string) => void;
   getStudyGroup: (id: string) => StudyGroup | undefined;
+  getGroupForDocument: (documentId: string) => StudyGroup | undefined;
+  toggleGroupCollapsed: (groupId: string) => void;
 
   // Margin Note Actions
   addMarginNote: (note: Omit<MarginNote, "id" | "createdAt" | "updatedAt">) => string;
@@ -28,7 +30,7 @@ interface StudyGroupState {
   linkAnnotationToMarginNote: (noteId: string, annotationId: string) => void;
 }
 
-const GROUP_COLORS = [
+export const GROUP_COLORS = [
   "#ef4444", "#f97316", "#f59e0b", "#84cc16", "#22c55e",
   "#14b8a6", "#06b6d4", "#3b82f6", "#6366f1", "#8b5cf6",
   "#a855f7", "#d946ef", "#ec4899", "#f43f5e",
@@ -50,6 +52,7 @@ export const useStudyGroupStore = create<StudyGroupState>()(
           description,
           color: color || GROUP_COLORS[Math.floor(Math.random() * GROUP_COLORS.length)],
           documentIds: [],
+          collapsed: false,
           createdAt: new Date(),
           updatedAt: new Date(),
         };
@@ -100,6 +103,18 @@ export const useStudyGroupStore = create<StudyGroupState>()(
 
       getStudyGroup: (id) => {
         return get().studyGroups.find((g) => g.id === id);
+      },
+
+      getGroupForDocument: (documentId) => {
+        return get().studyGroups.find((g) => g.documentIds.includes(documentId));
+      },
+
+      toggleGroupCollapsed: (groupId) => {
+        set((state) => ({
+          studyGroups: state.studyGroups.map((g) =>
+            g.id === groupId ? { ...g, collapsed: !g.collapsed } : g
+          ),
+        }));
       },
 
       // Margin Note Actions

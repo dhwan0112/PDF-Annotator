@@ -100,13 +100,25 @@ function App() {
     return () => clearTimeout(timeout);
   }, [filePath, currentPage, pdfDocument, updateDocumentProgress]);
 
+  const { getGroupForDocument } = useStudyGroupStore();
+  const documents = useLibraryStore((state) => state.documents);
+
   // Handle opening document from library (with tabs support)
   const handleOpenDocument = useCallback((documentPath: string) => {
+    // Find the document in library to get its ID
+    const doc = documents.find((d) => d.file_path === documentPath);
+    const documentId = doc?.id || null;
+
+    // Find the study group this document belongs to
+    const studyGroup = documentId ? getGroupForDocument(documentId) : undefined;
+    const groupId = studyGroup?.id || null;
+
     // Open in a new tab (or switch to existing tab)
-    openTab(documentPath, null);
+    // Auto-assign to study group if document belongs to one
+    openTab(documentPath, null, documentId, groupId);
     setFilePath(documentPath);
     setCurrentView("viewer");
-  }, [openTab, setFilePath, setCurrentView]);
+  }, [openTab, setFilePath, setCurrentView, documents, getGroupForDocument]);
 
   // Sync pdfStore with active tab state
   useEffect(() => {

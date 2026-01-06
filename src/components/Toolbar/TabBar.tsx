@@ -1,7 +1,8 @@
 import { useState, useRef, useEffect } from "react";
 import { X, FileText, ChevronDown, ChevronRight, FolderPlus } from "lucide-react";
-import { useTabStore, TAB_GROUP_COLORS } from "../../stores";
-import type { TabState, TabGroup } from "../../stores";
+import { useTabStore, useStudyGroupStore, GROUP_COLORS } from "../../stores";
+import type { TabState } from "../../stores";
+import type { StudyGroup } from "../../types";
 
 interface TabBarProps {
   onTabChange?: (tab: TabState) => void;
@@ -10,17 +11,22 @@ interface TabBarProps {
 export function TabBar({ onTabChange }: TabBarProps) {
   const {
     tabs,
-    groups,
     activeTabId,
     setActiveTab,
     closeTab,
-    createGroup,
-    updateGroup,
-    deleteGroup,
-    toggleGroupCollapsed,
     moveTabToGroup,
     closeGroupTabs,
   } = useTabStore();
+
+  const {
+    studyGroups,
+    createStudyGroup,
+    updateStudyGroup,
+    deleteStudyGroup,
+    toggleGroupCollapsed,
+    addDocumentToGroup,
+    removeDocumentFromGroup,
+  } = useStudyGroupStore();
 
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; tabId: string } | null>(null);
   const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
@@ -72,9 +78,22 @@ export function TabBar({ onTabChange }: TabBarProps) {
 
   const handleCreateNewGroup = () => {
     if (!contextMenu) return;
-    const groupId = createGroup("New Group", groups.length % TAB_GROUP_COLORS.length);
+    const tab = tabs.find((t) => t.id === contextMenu.tabId);
+    if (!tab) return;
+
+    // Create new study group with a random color
+    const colorIndex = studyGroups.length % GROUP_COLORS.length;
+    const groupId = createStudyGroup("New Group", undefined, GROUP_COLORS[colorIndex]);
+
+    // Add document to group if it has a documentId
+    if (tab.documentId) {
+      addDocumentToGroup(groupId, tab.documentId);
+    }
+
+    // Update tab's groupId
     moveTabToGroup(contextMenu.tabId, groupId);
     setContextMenu(null);
+
     // Start editing the group name
     setEditingGroupId(groupId);
     setEditingName("New Group");
@@ -82,39 +101,60 @@ export function TabBar({ onTabChange }: TabBarProps) {
 
   const handleAddToGroup = (groupId: string) => {
     if (!contextMenu) return;
+    const tab = tabs.find((t) => t.id === contextMenu.tabId);
+    if (!tab) return;
+
+    // Add document to study group if it has a documentId
+    if (tab.documentId) {
+      addDocumentToGroup(groupId, tab.documentId);
+    }
+
     moveTabToGroup(contextMenu.tabId, groupId);
     setContextMenu(null);
   };
 
   const handleRemoveFromGroup = () => {
     if (!contextMenu) return;
+    const tab = tabs.find((t) => t.id === contextMenu.tabId);
+    if (!tab) return;
+
+    // Remove document from study group if it has a documentId and groupId
+    if (tab.documentId && tab.groupId) {
+      removeDocumentFromGroup(tab.groupId, tab.documentId);
+    }
+
     moveTabToGroup(contextMenu.tabId, null);
     setContextMenu(null);
   };
 
   const handleGroupNameSubmit = (groupId: string) => {
     if (editingName.trim()) {
-      updateGroup(groupId, { name: editingName.trim() });
+      updateStudyGroup(groupId, { name: editingName.trim() });
     }
     setEditingGroupId(null);
   };
 
-  const handleGroupColorChange = (groupId: string, colorIndex: number) => {
-    updateGroup(groupId, { colorIndex });
+  const handleGroupColorChange = (groupId: string, color: string) => {
+    updateStudyGroup(groupId, { color });
   };
 
   // Organize tabs by group
   const ungroupedTabs = tabs.filter((t) => !t.groupId);
   const groupedTabs = new Map<string, TabState[]>();
-  groups.forEach((g) => {
+  studyGroups.forEach((g) => {
     groupedTabs.set(g.id, tabs.filter((t) => t.groupId === g.id));
   });
 
-  const renderTab = (tab: TabState, group?: TabGroup) => {
+  const renderTab = (tab: TabState, group?: StudyGroup) => {
     const isActive = tab.id === activeTabId;
     const fileName = tab.filePath.split(/[\\/]/).pop() || "Untitled";
     const displayName = fileName.length > 20 ? fileName.substring(0, 17) + "..." : fileName;
-    const groupColor = group ? TAB_GROUP_COLORS[group.colorIndex] : null;
+    const groupColor = group?.color;
+
+    // Generate styles based on hex color
+    const bgStyle = groupColor ? { backgroundColor: `${groupColor}20` } : undefined;
+    const borderStyle = groupColor ? { borderColor: groupColor } : undefined;
+    const textStyle = groupColor ? { color: groupColor } : undefined;
 
     return (
       <div
@@ -124,13 +164,20 @@ export function TabBar({ onTabChange }: TabBarProps) {
         onContextMenu={(e) => handleContextMenu(e, tab.id)}
         className={`group flex items-center gap-1.5 px-2.5 py-1.5 cursor-pointer min-w-0 max-w-[180px] transition-colors ${
           isActive
-            ? `bg-white dark:bg-gray-800 rounded-t-lg border-t border-l border-r ${groupColor ? groupColor.border : "border-gray-300 dark:border-gray-600"} -mb-px`
-            : `${groupColor ? groupColor.bg : "bg-gray-100 dark:bg-gray-850"} hover:bg-gray-50 dark:hover:bg-gray-800 rounded-t-md mt-1 mx-0.5 border border-transparent`
-        }`}
+            ? "bg-white dark:bg-gray-800 rounded-t-lg border-t border-l border-r -mb-px"
+            : "hover:bg-gray-50 dark:hover:bg-gray-800 rounded-t-md mt-1 mx-0.5 border border-transparent"
+        } ${!isActive && !groupColor ? "bg-gray-100 dark:bg-gray-850" : ""}`}
+        style={isActive ? borderStyle : bgStyle}
         title={tab.filePath}
       >
-        <FileText className={`w-3.5 h-3.5 flex-shrink-0 ${isActive ? "text-blue-500" : groupColor ? groupColor.text : "text-gray-500 dark:text-gray-400"}`} />
-        <span className={`truncate text-xs ${isActive ? "text-gray-900 dark:text-gray-100 font-medium" : groupColor ? groupColor.text : "text-gray-600 dark:text-gray-400"}`}>
+        <FileText
+          className={`w-3.5 h-3.5 flex-shrink-0 ${isActive ? "text-blue-500" : !groupColor ? "text-gray-500 dark:text-gray-400" : ""}`}
+          style={!isActive && groupColor ? textStyle : undefined}
+        />
+        <span
+          className={`truncate text-xs ${isActive ? "text-gray-900 dark:text-gray-100 font-medium" : !groupColor ? "text-gray-600 dark:text-gray-400" : ""}`}
+          style={!isActive && groupColor ? textStyle : undefined}
+        >
           {displayName}
         </span>
         <button
@@ -146,23 +193,28 @@ export function TabBar({ onTabChange }: TabBarProps) {
     );
   };
 
-  const renderGroupHeader = (group: TabGroup) => {
-    const color = TAB_GROUP_COLORS[group.colorIndex];
+  const renderGroupHeader = (group: StudyGroup) => {
     const tabsInGroup = groupedTabs.get(group.id) || [];
 
     if (tabsInGroup.length === 0) return null;
+
+    const groupColor = group.color;
+    const bgStyle = { backgroundColor: `${groupColor}20` };
+    const borderStyle = { borderColor: groupColor };
+    const textStyle = { color: groupColor };
 
     return (
       <div key={`group-${group.id}`} className="flex items-center">
         {/* Group header */}
         <div
-          className={`flex items-center gap-1 px-2 py-1 ${color.bg} rounded-t-md mt-1 cursor-pointer border-b-2 ${color.border}`}
+          className="flex items-center gap-1 px-2 py-1 rounded-t-md mt-1 cursor-pointer border-b-2"
+          style={{ ...bgStyle, ...borderStyle }}
           onClick={() => toggleGroupCollapsed(group.id)}
         >
           {group.collapsed ? (
-            <ChevronRight className={`w-3 h-3 ${color.text}`} />
+            <ChevronRight className="w-3 h-3" style={textStyle} />
           ) : (
-            <ChevronDown className={`w-3 h-3 ${color.text}`} />
+            <ChevronDown className="w-3 h-3" style={textStyle} />
           )}
           {editingGroupId === group.id ? (
             <input
@@ -176,11 +228,13 @@ export function TabBar({ onTabChange }: TabBarProps) {
                 if (e.key === "Escape") setEditingGroupId(null);
               }}
               onClick={(e) => e.stopPropagation()}
-              className={`w-20 px-1 text-xs ${color.text} bg-transparent border-b border-current outline-none`}
+              className="w-20 px-1 text-xs bg-transparent border-b border-current outline-none"
+              style={textStyle}
             />
           ) : (
             <span
-              className={`text-xs font-medium ${color.text}`}
+              className="text-xs font-medium"
+              style={textStyle}
               onDoubleClick={(e) => {
                 e.stopPropagation();
                 setEditingGroupId(group.id);
@@ -190,19 +244,23 @@ export function TabBar({ onTabChange }: TabBarProps) {
               {group.name}
             </span>
           )}
-          <span className={`text-xs ${color.text} opacity-60`}>({tabsInGroup.length})</span>
+          <span className="text-xs opacity-60" style={textStyle}>({tabsInGroup.length})</span>
           {/* Color picker */}
           <div className="relative group/color ml-1">
-            <div className={`w-3 h-3 rounded-full ${color.bg} border ${color.border}`} />
+            <div
+              className="w-3 h-3 rounded-full border"
+              style={{ backgroundColor: groupColor, borderColor: groupColor }}
+            />
             <div className="absolute top-full left-0 mt-1 hidden group-hover/color:flex gap-1 p-1 bg-white dark:bg-gray-800 rounded shadow-lg border border-gray-200 dark:border-gray-600 z-50">
-              {TAB_GROUP_COLORS.map((c, i) => (
+              {GROUP_COLORS.map((c) => (
                 <button
-                  key={c.name}
+                  key={c}
                   onClick={(e) => {
                     e.stopPropagation();
-                    handleGroupColorChange(group.id, i);
+                    handleGroupColorChange(group.id, c);
                   }}
-                  className={`w-4 h-4 rounded-full ${c.bg} border ${c.border} hover:scale-110 transition-transform`}
+                  className="w-4 h-4 rounded-full border hover:scale-110 transition-transform"
+                  style={{ backgroundColor: c, borderColor: c }}
                 />
               ))}
             </div>
@@ -213,13 +271,13 @@ export function TabBar({ onTabChange }: TabBarProps) {
               e.stopPropagation();
               if (confirm(`Close all ${tabsInGroup.length} tabs in "${group.name}"?`)) {
                 closeGroupTabs(group.id);
-                deleteGroup(group.id);
+                deleteStudyGroup(group.id);
               }
             }}
             className="ml-1 p-0.5 rounded hover:bg-black/10 dark:hover:bg-white/10 opacity-0 group-hover:opacity-100"
             title="Close group"
           >
-            <X className={`w-3 h-3 ${color.text}`} />
+            <X className="w-3 h-3" style={textStyle} />
           </button>
         </div>
         {/* Group tabs */}
@@ -231,7 +289,7 @@ export function TabBar({ onTabChange }: TabBarProps) {
   return (
     <div className="flex items-center bg-gray-200 dark:bg-gray-900 border-b border-gray-300 dark:border-gray-700 overflow-x-auto">
       {/* Grouped tabs */}
-      {groups.map((group) => renderGroupHeader(group))}
+      {studyGroups.map((group) => renderGroupHeader(group))}
 
       {/* Ungrouped tabs */}
       {ungroupedTabs.map((tab) => renderTab(tab))}
@@ -253,22 +311,22 @@ export function TabBar({ onTabChange }: TabBarProps) {
             <FolderPlus className="w-4 h-4" />
             Add to new group
           </button>
-          {groups.length > 0 && (
+          {studyGroups.length > 0 && (
             <>
               <div className="border-t border-gray-200 dark:border-gray-600 my-1" />
-              {groups.map((group) => {
-                const color = TAB_GROUP_COLORS[group.colorIndex];
-                return (
-                  <button
-                    key={group.id}
-                    onClick={() => handleAddToGroup(group.id)}
-                    className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
-                  >
-                    <div className={`w-3 h-3 rounded-full ${color.bg} border ${color.border}`} />
-                    {group.name}
-                  </button>
-                );
-              })}
+              {studyGroups.map((group) => (
+                <button
+                  key={group.id}
+                  onClick={() => handleAddToGroup(group.id)}
+                  className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+                >
+                  <div
+                    className="w-3 h-3 rounded-full border"
+                    style={{ backgroundColor: group.color, borderColor: group.color }}
+                  />
+                  {group.name}
+                </button>
+              ))}
             </>
           )}
           {tabs.find((t) => t.id === contextMenu.tabId)?.groupId && (

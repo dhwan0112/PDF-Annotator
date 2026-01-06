@@ -37,12 +37,14 @@ export type Theme = "light" | "dark" | "system";
 export type ViewMode = "single" | "continuous";
 
 // Study Group - for grouping multiple PDFs together (like MarginNote's notebook)
+// Also used for tab grouping in the tab bar
 export interface StudyGroup {
   id: string;
   name: string;
   description?: string;
   color: string;
   documentIds: string[]; // References to documents in libraryStore
+  collapsed: boolean; // UI state for tab bar collapse/expand
   createdAt: Date;
   updatedAt: Date;
 }

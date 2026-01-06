@@ -1,5 +1,5 @@
 import { useState, useRef } from "react";
-import { useAnnotationStore, usePdfStore, useUiStore, useTabStore } from "../../stores";
+import { useAnnotationStore, usePdfStore, useUiStore, useTabStore, useStudyGroupStore, useLibraryStore } from "../../stores";
 import {
   MousePointer2,
   Pen,
@@ -69,6 +69,8 @@ export function Toolbar() {
   } = usePdfStore();
   const { theme, setTheme, currentView, setCurrentView } = useUiStore();
   const { openTab } = useTabStore();
+  const { getGroupForDocument } = useStudyGroupStore();
+  const documents = useLibraryStore((state) => state.documents);
 
   const [settingsPopoverTool, setSettingsPopoverTool] = useState<AnnotationTool | null>(null);
   const [settingsAnchorEl, setSettingsAnchorEl] = useState<HTMLElement | null>(null);
@@ -87,14 +89,24 @@ export function Toolbar() {
           title: string | null;
           author: string | null;
         }>("read_pdf_metadata", { filePath });
+
+        // Find the document in library to get its ID
+        const doc = documents.find((d) => d.file_path === filePath);
+        const documentId = doc?.id || null;
+
+        // Find the study group this document belongs to
+        const studyGroup = documentId ? getGroupForDocument(documentId) : undefined;
+        const groupId = studyGroup?.id || null;
+
         // Open in a new tab (or switch to existing)
+        // Auto-assign to study group if document belongs to one
         openTab(filePath, {
           path: metadata.path,
           fileName: metadata.file_name,
           pageCount: metadata.page_count,
           title: metadata.title,
           author: metadata.author,
-        });
+        }, documentId, groupId);
         usePdfStore.getState().setFile(filePath, {
           path: metadata.path,
           fileName: metadata.file_name,
