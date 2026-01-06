@@ -48,6 +48,25 @@ export function TabBar({ onTabChange }: TabBarProps) {
     }
   }, [contextMenu]);
 
+  // Add body class during drag to override cursor globally
+  useEffect(() => {
+    if (draggingTabId) {
+      document.body.classList.add("tab-dragging");
+      // Add global dragover handler to prevent forbidden cursor
+      const handleGlobalDragOver = (e: DragEvent) => {
+        e.preventDefault();
+        if (e.dataTransfer) {
+          e.dataTransfer.dropEffect = "move";
+        }
+      };
+      document.addEventListener("dragover", handleGlobalDragOver);
+      return () => {
+        document.body.classList.remove("tab-dragging");
+        document.removeEventListener("dragover", handleGlobalDragOver);
+      };
+    }
+  }, [draggingTabId]);
+
   // Focus input when editing group name
   useEffect(() => {
     if (editingGroupId && editInputRef.current) {
@@ -387,11 +406,12 @@ export function TabBar({ onTabChange }: TabBarProps) {
           }`}
           style={{ ...bgStyle, ...borderStyle }}
           onClick={() => toggleGroupCollapsed(group.id)}
+          onDragOver={handleDragOver}
         >
           {group.collapsed ? (
-            <ChevronRight className="w-3 h-3" style={textStyle} />
+            <ChevronRight className="w-3 h-3 pointer-events-none" style={textStyle} />
           ) : (
-            <ChevronDown className="w-3 h-3" style={textStyle} />
+            <ChevronDown className="w-3 h-3 pointer-events-none" style={textStyle} />
           )}
           {editingGroupId === group.id ? (
             <input
@@ -410,52 +430,52 @@ export function TabBar({ onTabChange }: TabBarProps) {
             />
           ) : (
             <span
-              className="text-xs font-medium"
+              className="text-xs font-medium pointer-events-none"
               style={textStyle}
-              onDoubleClick={(e) => {
-                e.stopPropagation();
-                setEditingGroupId(group.id);
-                setEditingName(group.name);
-              }}
             >
               {group.name}
             </span>
           )}
-          <span className="text-xs opacity-60" style={textStyle}>({tabsInGroup.length})</span>
-          {/* Color picker */}
-          <div className="relative group/color ml-1">
-            <div
-              className="w-3 h-3 rounded-full border"
-              style={{ backgroundColor: groupColor, borderColor: groupColor }}
-            />
-            <div className="absolute top-full left-0 mt-1 hidden group-hover/color:flex gap-1 p-1 bg-white dark:bg-gray-800 rounded shadow-lg border border-gray-200 dark:border-gray-600 z-50">
-              {GROUP_COLORS.map((c) => (
-                <button
-                  key={c}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleGroupColorChange(group.id, c);
-                  }}
-                  className="w-4 h-4 rounded-full border hover:scale-110 transition-transform"
-                  style={{ backgroundColor: c, borderColor: c }}
-                />
-              ))}
+          <span className="text-xs opacity-60 pointer-events-none" style={textStyle}>({tabsInGroup.length})</span>
+          {/* Color picker - hide during drag */}
+          {!draggingTabId && (
+            <div className="relative group/color ml-1">
+              <div
+                className="w-3 h-3 rounded-full border"
+                style={{ backgroundColor: groupColor, borderColor: groupColor }}
+                onDoubleClick={(e) => e.stopPropagation()}
+              />
+              <div className="absolute top-full left-0 mt-1 hidden group-hover/color:flex gap-1 p-1 bg-white dark:bg-gray-800 rounded shadow-lg border border-gray-200 dark:border-gray-600 z-50">
+                {GROUP_COLORS.map((c) => (
+                  <button
+                    key={c}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleGroupColorChange(group.id, c);
+                    }}
+                    className="w-4 h-4 rounded-full border hover:scale-110 transition-transform"
+                    style={{ backgroundColor: c, borderColor: c }}
+                  />
+                ))}
+              </div>
             </div>
-          </div>
-          {/* Close group button */}
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              if (confirm(`Close all ${tabsInGroup.length} tabs in "${group.name}"?`)) {
-                closeGroupTabs(group.id);
-                deleteStudyGroup(group.id);
-              }
-            }}
-            className="ml-1 p-0.5 rounded hover:bg-black/10 dark:hover:bg-white/10 opacity-0 group-hover:opacity-100"
-            title="Close group"
-          >
-            <X className="w-3 h-3" style={textStyle} />
-          </button>
+          )}
+          {/* Close group button - hide during drag */}
+          {!draggingTabId && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                if (confirm(`Close all ${tabsInGroup.length} tabs in "${group.name}"?`)) {
+                  closeGroupTabs(group.id);
+                  deleteStudyGroup(group.id);
+                }
+              }}
+              className="ml-1 p-0.5 rounded hover:bg-black/10 dark:hover:bg-white/10 opacity-0 group-hover:opacity-100"
+              title="Close group"
+            >
+              <X className="w-3 h-3 pointer-events-none" style={textStyle} />
+            </button>
+          )}
         </div>
         {/* Group tabs */}
         {!group.collapsed && tabsInGroup.map((tab) => renderTab(tab, group))}
