@@ -300,8 +300,11 @@ export function Toolbar() {
                 }}
                 onContextMenu={(e) => {
                   e.preventDefault();
-                  setSettingsPopoverTool(id);
-                  setSettingsAnchorEl(toolButtonRefs.current.get(id) || null);
+                  // Don't show settings for select tool (it has sub-mode buttons instead)
+                  if (id !== "select") {
+                    setSettingsPopoverTool(id);
+                    setSettingsAnchorEl(toolButtonRefs.current.get(id) || null);
+                  }
                 }}
                 onPointerDown={(e) => {
                   // Show settings on stylus pen tap or barrel button
@@ -310,8 +313,10 @@ export function Toolbar() {
                     if (e.buttons === 2 || e.buttons === 32) {
                       e.preventDefault();
                       setCurrentTool(id);
-                      setSettingsPopoverTool(id);
-                      setSettingsAnchorEl(toolButtonRefs.current.get(id) || null);
+                      if (id !== "select") {
+                        setSettingsPopoverTool(id);
+                        setSettingsAnchorEl(toolButtonRefs.current.get(id) || null);
+                      }
                     } else {
                       // For regular pen tap, select tool and show settings for drawing tools
                       setCurrentTool(id);

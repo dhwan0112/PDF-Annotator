@@ -15,7 +15,6 @@ import { collectSyncData, applySyncData, mergeSyncData, type SyncData } from "./
 const DROPBOX_AUTH_URL = "https://www.dropbox.com/oauth2/authorize";
 const DROPBOX_TOKEN_URL = "https://api.dropboxapi.com/oauth2/token";
 const DROPBOX_CONTENT_URL = "https://content.dropboxapi.com/2";
-const REDIRECT_URI = "http://localhost:8374/callback";
 const SYNC_FILE_PATH = "/marginalia-sync.json";
 
 // PKCE helpers
@@ -113,12 +112,12 @@ class DropboxService {
     // Store verifier for later use
     sessionStorage.setItem("dropbox-code-verifier", this.codeVerifier);
 
+    // For desktop apps, don't use redirect_uri - user will copy the code manually
     const params = new URLSearchParams({
       client_id: this.config.appKey,
       response_type: "code",
       code_challenge: codeChallenge,
       code_challenge_method: "S256",
-      redirect_uri: REDIRECT_URI,
       token_access_type: "offline",
     });
 
@@ -136,6 +135,7 @@ class DropboxService {
       throw new Error("Code verifier not found. Please restart authorization.");
     }
 
+    // For desktop apps without redirect_uri, don't include it in token exchange
     const response = await fetch(DROPBOX_TOKEN_URL, {
       method: "POST",
       headers: {
@@ -145,7 +145,6 @@ class DropboxService {
         code,
         grant_type: "authorization_code",
         client_id: this.config.appKey,
-        redirect_uri: REDIRECT_URI,
         code_verifier: codeVerifier,
       }),
     });
