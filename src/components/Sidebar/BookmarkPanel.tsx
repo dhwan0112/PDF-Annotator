@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useBookmarkStore, usePdfStore } from "../../stores";
 import { Bookmark, Plus, Trash2, Edit2, GripVertical, Search, X } from "lucide-react";
 import type { Bookmark as BookmarkType } from "../../types";
@@ -33,8 +33,21 @@ export function BookmarkPanel() {
   const [newNote, setNewNote] = useState("");
   const [newColor, setNewColor] = useState(BOOKMARK_COLORS[4]);
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
+  const globalDragHandlerRef = useRef<((e: DragEvent) => void) | null>(null);
 
   const filteredBookmarks = getFilteredBookmarks();
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      document.body.classList.remove("bookmark-dragging");
+      if (globalDragHandlerRef.current) {
+        document.removeEventListener("dragover", globalDragHandlerRef.current);
+        document.removeEventListener("dragenter", globalDragHandlerRef.current);
+        globalDragHandlerRef.current = null;
+      }
+    };
+  }, []);
 
   const handleAddBookmark = () => {
     if (!newTitle.trim()) return;
@@ -76,12 +89,28 @@ export function BookmarkPanel() {
     setIsAdding(false);
   };
 
-  const handleDragStart = (index: number) => {
+  const handleDragStart = (e: React.DragEvent, index: number) => {
+    e.stopPropagation();
     setDraggedIndex(index);
+    e.dataTransfer.effectAllowed = "move";
+
+    // Add global handler immediately to prevent forbidden cursor
+    document.body.classList.add("bookmark-dragging");
+    const globalHandler = (ev: DragEvent) => {
+      ev.preventDefault();
+      if (ev.dataTransfer) {
+        ev.dataTransfer.dropEffect = "move";
+      }
+    };
+    globalDragHandlerRef.current = globalHandler;
+    document.addEventListener("dragover", globalHandler);
+    document.addEventListener("dragenter", globalHandler);
   };
 
   const handleDragOver = (e: React.DragEvent, index: number) => {
     e.preventDefault();
+    e.stopPropagation();
+    e.dataTransfer.dropEffect = "move";
     if (draggedIndex === null || draggedIndex === index) return;
 
     reorderBookmarks(draggedIndex, index);
@@ -90,6 +119,12 @@ export function BookmarkPanel() {
 
   const handleDragEnd = () => {
     setDraggedIndex(null);
+    document.body.classList.remove("bookmark-dragging");
+    if (globalDragHandlerRef.current) {
+      document.removeEventListener("dragover", globalDragHandlerRef.current);
+      document.removeEventListener("dragenter", globalDragHandlerRef.current);
+      globalDragHandlerRef.current = null;
+    }
   };
 
   return (
@@ -199,7 +234,7 @@ export function BookmarkPanel() {
               <li
                 key={bookmark.id}
                 draggable
-                onDragStart={() => handleDragStart(index)}
+                onDragStart={(e) => handleDragStart(e, index)}
                 onDragOver={(e) => handleDragOver(e, index)}
                 onDragEnd={handleDragEnd}
                 className={`group flex items-start gap-2 p-2 hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer transition-colors ${

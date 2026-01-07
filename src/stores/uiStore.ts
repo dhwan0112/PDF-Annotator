@@ -3,11 +3,13 @@ import { persist } from "zustand/middleware";
 import type { Theme } from "../types";
 
 export type AppView = "library" | "viewer" | "mindmap";
+export type SplitViewMode = "pdfOnly" | "mindMapOnly" | "split";
 
 interface UiState {
   // View
   currentView: AppView;
   activeMindMapId: string | null;
+  splitViewMode: SplitViewMode;
 
   // Theme
   theme: Theme;
@@ -45,6 +47,7 @@ interface UiState {
   toggleMindMapPanel: () => void;
   setMindMapPanelVisible: (visible: boolean) => void;
   setMindMapPanelWidth: (width: number) => void;
+  setSplitViewMode: (mode: SplitViewMode) => void;
 }
 
 export const useUiStore = create<UiState>()(
@@ -53,6 +56,7 @@ export const useUiStore = create<UiState>()(
       // Initial state
       currentView: "library",
       activeMindMapId: null,
+      splitViewMode: "split",
       theme: "system",
       sidebarVisible: true,
       sidebarWidth: 280,
@@ -116,6 +120,8 @@ export const useUiStore = create<UiState>()(
         const clampedWidth = Math.max(300, Math.min(800, width));
         set({ mindMapPanelWidth: clampedWidth });
       },
+
+      setSplitViewMode: (mode) => set({ splitViewMode: mode }),
     }),
     {
       name: "pdf-annotator-ui",

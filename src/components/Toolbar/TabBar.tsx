@@ -48,24 +48,18 @@ export function TabBar({ onTabChange }: TabBarProps) {
     }
   }, [contextMenu]);
 
-  // Add body class during drag to override cursor globally
+  // Cleanup global handlers on unmount
   useEffect(() => {
-    if (draggingTabId) {
-      document.body.classList.add("tab-dragging");
-      // Add global dragover handler to prevent forbidden cursor
-      const handleGlobalDragOver = (e: DragEvent) => {
-        e.preventDefault();
-        if (e.dataTransfer) {
-          e.dataTransfer.dropEffect = "move";
-        }
-      };
-      document.addEventListener("dragover", handleGlobalDragOver);
-      return () => {
-        document.body.classList.remove("tab-dragging");
-        document.removeEventListener("dragover", handleGlobalDragOver);
-      };
-    }
-  }, [draggingTabId]);
+    return () => {
+      // Ensure cleanup on unmount
+      document.body.classList.remove("tab-dragging");
+      if (globalDragHandlerRef.current) {
+        document.removeEventListener("dragover", globalDragHandlerRef.current);
+        document.removeEventListener("dragenter", globalDragHandlerRef.current);
+        globalDragHandlerRef.current = null;
+      }
+    };
+  }, []);
 
   // Focus input when editing group name
   useEffect(() => {
@@ -163,6 +157,9 @@ export function TabBar({ onTabChange }: TabBarProps) {
     updateStudyGroup(groupId, { color });
   };
 
+  // Global dragover handler reference for cleanup
+  const globalDragHandlerRef = useRef<((e: DragEvent) => void) | null>(null);
+
   // Drag and drop handlers
   const handleDragStart = (e: React.DragEvent, tabId: string) => {
     e.stopPropagation();
@@ -173,12 +170,34 @@ export function TabBar({ onTabChange }: TabBarProps) {
     if (e.currentTarget instanceof HTMLElement) {
       e.dataTransfer.setDragImage(e.currentTarget, 10, 10);
     }
+
+    // CRITICAL: Add global handler IMMEDIATELY (synchronously) to prevent forbidden cursor
+    // The useEffect approach has a delay which causes the forbidden cursor to appear
+    document.body.classList.add("tab-dragging");
+
+    const globalHandler = (ev: DragEvent) => {
+      ev.preventDefault();
+      if (ev.dataTransfer) {
+        ev.dataTransfer.dropEffect = "move";
+      }
+    };
+    globalDragHandlerRef.current = globalHandler;
+    document.addEventListener("dragover", globalHandler);
+    document.addEventListener("dragenter", globalHandler);
   };
 
   const handleDragEnd = () => {
     setDraggingTabId(null);
     setDropTarget(null);
     setDropTargetTab(null);
+
+    // Clean up global handlers
+    document.body.classList.remove("tab-dragging");
+    if (globalDragHandlerRef.current) {
+      document.removeEventListener("dragover", globalDragHandlerRef.current);
+      document.removeEventListener("dragenter", globalDragHandlerRef.current);
+      globalDragHandlerRef.current = null;
+    }
   };
 
   const handleDragOver = (e: React.DragEvent) => {
@@ -247,12 +266,14 @@ export function TabBar({ onTabChange }: TabBarProps) {
     e.stopPropagation();
 
     const tabId = draggingTabId || e.dataTransfer.getData("text/plain");
-    if (!tabId) return;
+    if (!tabId) {
+      handleDragEnd();
+      return;
+    }
 
     const tab = tabs.find((t) => t.id === tabId);
     if (!tab || tab.groupId === groupId) {
-      setDraggingTabId(null);
-      setDropTarget(null);
+      handleDragEnd();
       return;
     }
 
@@ -267,8 +288,7 @@ export function TabBar({ onTabChange }: TabBarProps) {
     }
 
     moveTabToGroup(tabId, groupId);
-    setDraggingTabId(null);
-    setDropTarget(null);
+    handleDragEnd();
   };
 
   const handleDropOnUngrouped = (e: React.DragEvent) => {
@@ -276,12 +296,14 @@ export function TabBar({ onTabChange }: TabBarProps) {
     e.stopPropagation();
 
     const tabId = draggingTabId || e.dataTransfer.getData("text/plain");
-    if (!tabId) return;
+    if (!tabId) {
+      handleDragEnd();
+      return;
+    }
 
     const tab = tabs.find((t) => t.id === tabId);
     if (!tab || !tab.groupId) {
-      setDraggingTabId(null);
-      setDropTarget(null);
+      handleDragEnd();
       return;
     }
 
@@ -291,8 +313,7 @@ export function TabBar({ onTabChange }: TabBarProps) {
     }
 
     moveTabToGroup(tabId, null);
-    setDraggingTabId(null);
-    setDropTarget(null);
+    handleDragEnd();
   };
 
   // Organize tabs by group
@@ -489,6 +510,11 @@ export function TabBar({ onTabChange }: TabBarProps) {
       onDragOver={(e) => {
         e.preventDefault();
         e.dataTransfer.dropEffect = "move";
+      }}
+      onDrop={(e) => {
+        // Fallback handler for drops that don't land on specific zones
+        e.preventDefault();
+        handleDragEnd();
       }}
     >
       {/* Grouped tabs */}

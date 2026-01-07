@@ -9,7 +9,7 @@ import { usePdfDocument, useAnnotationPersistence, useBookmarkPersistence, useAu
 import { GripVertical, Network } from "lucide-react";
 
 function App() {
-  const { theme, currentView, setCurrentView, activeMindMapId, setActiveMindMapId, mindMapPanelVisible, toggleMindMapPanel, mindMapPanelWidth, setMindMapPanelWidth } = useUiStore();
+  const { theme, currentView, setCurrentView, activeMindMapId, setActiveMindMapId, mindMapPanelVisible, toggleMindMapPanel, mindMapPanelWidth, setMindMapPanelWidth, splitViewMode, setSplitViewMode } = useUiStore();
   const { pdfDocument } = usePdfDocument();
   const { filePath, setFilePath, currentPage, setCurrentPage, setZoomLevel, setViewMode } = usePdfStore();
   const { addDocument, updateDocumentProgress } = useLibraryStore();
@@ -307,6 +307,15 @@ function App() {
           case "feature.toggleMindMap":
             handleToggleMindMapPanel();
             break;
+          case "feature.pdfOnlyView":
+            setSplitViewMode("pdfOnly");
+            break;
+          case "feature.mindMapOnlyView":
+            setSplitViewMode("mindMapOnly");
+            break;
+          case "feature.splitView":
+            setSplitViewMode("split");
+            break;
         }
       }
     };
@@ -327,6 +336,7 @@ function App() {
     goToLastPage,
     setCurrentTool,
     handleToggleMindMapPanel,
+    setSplitViewMode,
   ]);
 
   // Handle opening mind map
@@ -388,6 +398,9 @@ function App() {
     ? getMindMap(activeMindMapId)?.studyGroupId || ""
     : "";
 
+  // Global handler reference for annotation drag cleanup
+  const annotationDragHandlerRef = useRef<((e: DragEvent) => void) | null>(null);
+
   // Handle drag start for selected annotations
   const handleAnnotationDragStart = useCallback((e: React.DragEvent) => {
     if (selectedAnnotationIds.size === 0) return;
@@ -404,10 +417,47 @@ function App() {
 
     e.dataTransfer.setData("application/json", JSON.stringify(dragData));
     e.dataTransfer.effectAllowed = "copy";
+
+    // CRITICAL: Add global handler IMMEDIATELY to prevent forbidden cursor
+    // Without this, the browser shows forbidden cursor on all non-drop-zone elements
+    document.body.classList.add("annotation-dragging");
+
+    const globalHandler = (ev: DragEvent) => {
+      ev.preventDefault();
+      if (ev.dataTransfer) {
+        ev.dataTransfer.dropEffect = "copy";
+      }
+    };
+    annotationDragHandlerRef.current = globalHandler;
+    document.addEventListener("dragover", globalHandler);
+    document.addEventListener("dragenter", globalHandler);
   }, [selectedAnnotationIds, getActiveTab, filePath]);
+
+  // Handle drag end for annotations
+  const handleAnnotationDragEnd = useCallback(() => {
+    clearSelection();
+    document.body.classList.remove("annotation-dragging");
+    if (annotationDragHandlerRef.current) {
+      document.removeEventListener("dragover", annotationDragHandlerRef.current);
+      document.removeEventListener("dragenter", annotationDragHandlerRef.current);
+      annotationDragHandlerRef.current = null;
+    }
+  }, [clearSelection]);
 
   // Check if we should show the drag handle
   const hasSelectedAnnotations = selectedAnnotationIds.size > 0;
+
+  // Cleanup annotation drag handler on unmount
+  useEffect(() => {
+    return () => {
+      document.body.classList.remove("annotation-dragging");
+      if (annotationDragHandlerRef.current) {
+        document.removeEventListener("dragover", annotationDragHandlerRef.current);
+        document.removeEventListener("dragenter", annotationDragHandlerRef.current);
+        annotationDragHandlerRef.current = null;
+      }
+    };
+  }, []);
 
   return (
     <div className="flex flex-col h-screen bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100">
@@ -423,45 +473,54 @@ function App() {
           <MindMapCanvas mindMapId={activeMindMapId} studyGroupId={activeMindMapStudyGroupId} onClose={handleCloseMindMap} onOpenDocument={handleOpenDocumentAtPage} />
         ) : (
           <>
-            <Sidebar pdfDocument={pdfDocument} />
-            <main className="flex-1 flex overflow-hidden relative">
-              <PdfViewer pdfDocument={pdfDocument} />
-              {/* Drag handle for selected annotations */}
-              {hasSelectedAnnotations && mindMapPanelVisible && (
-                <div
-                  draggable
-                  onDragStart={handleAnnotationDragStart}
-                  onDragEnd={() => clearSelection()}
-                  className="absolute bottom-4 right-4 z-50 flex items-center gap-2 px-3 py-2 bg-purple-600 text-white rounded-lg shadow-lg cursor-grab active:cursor-grabbing hover:bg-purple-700 transition-colors"
-                >
-                  <GripVertical className="w-4 h-4" />
-                  <span className="text-sm font-medium">
-                    {selectedAnnotationIds.size} 선택됨
-                  </span>
-                  <Network className="w-4 h-4" />
-                  <span className="text-xs">→ 마인드맵으로 드래그</span>
-                </div>
-              )}
-            </main>
-            {/* Mind Map Split Panel */}
-            {mindMapPanelVisible && (
+            {/* Show PDF view unless in mindMapOnly mode */}
+            {(!mindMapPanelVisible || splitViewMode !== "mindMapOnly") && (
               <>
-                {/* Resize Handle */}
-                <div
-                  className={`w-1.5 flex-shrink-0 cursor-col-resize group relative ${
-                    isResizing ? "bg-blue-500" : "hover:bg-blue-400"
-                  }`}
-                  onMouseDown={handleResizeStart}
-                >
-                  <div className="absolute inset-y-0 -left-1 -right-1" />
-                  <div className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-1 h-8 rounded-full transition-colors ${
-                    isResizing ? "bg-blue-300" : "bg-gray-300 dark:bg-gray-600 group-hover:bg-blue-300"
-                  }`} />
-                </div>
+                <Sidebar pdfDocument={pdfDocument} />
+                <main className="flex-1 flex overflow-hidden relative">
+                  <PdfViewer pdfDocument={pdfDocument} />
+                  {/* Drag handle for selected annotations */}
+                  {hasSelectedAnnotations && mindMapPanelVisible && splitViewMode === "split" && (
+                    <div
+                      draggable
+                      onDragStart={handleAnnotationDragStart}
+                      onDragEnd={handleAnnotationDragEnd}
+                      className="absolute bottom-4 right-4 z-50 flex items-center gap-2 px-3 py-2 bg-purple-600 text-white rounded-lg shadow-lg cursor-grab active:cursor-grabbing hover:bg-purple-700 transition-colors"
+                    >
+                      <GripVertical className="w-4 h-4" />
+                      <span className="text-sm font-medium">
+                        {selectedAnnotationIds.size} 선택됨
+                      </span>
+                      <Network className="w-4 h-4" />
+                      <span className="text-xs">→ 마인드맵으로 드래그</span>
+                    </div>
+                  )}
+                </main>
+              </>
+            )}
+            {/* Mind Map Split Panel - show unless in pdfOnly mode */}
+            {mindMapPanelVisible && splitViewMode !== "pdfOnly" && (
+              <>
+                {/* Resize Handle - only in split view */}
+                {splitViewMode === "split" && (
+                  <div
+                    className={`w-1.5 flex-shrink-0 cursor-col-resize group relative ${
+                      isResizing ? "bg-blue-500" : "hover:bg-blue-400"
+                    }`}
+                    onMouseDown={handleResizeStart}
+                  >
+                    <div className="absolute inset-y-0 -left-1 -right-1" />
+                    <div className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-1 h-8 rounded-full transition-colors ${
+                      isResizing ? "bg-blue-300" : "bg-gray-300 dark:bg-gray-600 group-hover:bg-blue-300"
+                    }`} />
+                  </div>
+                )}
                 {/* Mind Map Panel */}
                 <div
-                  className="border-l border-gray-200 dark:border-gray-700 flex-shrink-0 flex flex-col"
-                  style={{ width: mindMapPanelWidth }}
+                  className={`border-l border-gray-200 dark:border-gray-700 flex-shrink-0 flex flex-col ${
+                    splitViewMode === "mindMapOnly" ? "flex-1" : ""
+                  }`}
+                  style={splitViewMode === "mindMapOnly" ? undefined : { width: mindMapPanelWidth }}
                 >
                 {splitPanelMindMapId && activeTabGroupId ? (
                   <MindMapCanvas

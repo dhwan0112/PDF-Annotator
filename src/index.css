@@ -198,3 +198,15 @@ body.tab-dragging,
 body.tab-dragging * {
   cursor: grabbing !important;
 }
+
+/* Annotation dragging cursor override */
+body.annotation-dragging,
+body.annotation-dragging * {
+  cursor: grabbing !important;
+}
+
+/* Bookmark dragging cursor override */
+body.bookmark-dragging,
+body.bookmark-dragging * {
+  cursor: grabbing !important;
+}
