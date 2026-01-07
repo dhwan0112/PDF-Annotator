@@ -120,3 +120,6 @@ export type AnnotationTool =
   | "rect"
   | "arrow"
   | "text";
+
+// Selection sub-modes for the select tool
+export type SelectionMode = "lasso" | "rectangle" | "text";

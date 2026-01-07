@@ -31,7 +31,7 @@ function App() {
     goToFirstPage,
     goToLastPage,
   } = usePdfStore();
-  const { undo, redo, setCurrentTool, selectedAnnotationIds } = useAnnotationStore();
+  const { undo, redo, setCurrentTool, selectedAnnotationIds, clearSelection, deleteSelectedAnnotations } = useAnnotationStore();
   const { findShortcutByEvent } = useSettingsStore();
 
   // Apply theme on mount and when it changes
@@ -217,6 +217,23 @@ function App() {
         return;
       }
 
+      // Universal shortcuts (work in viewer)
+      if (currentView === "viewer") {
+        // Delete/Backspace to delete selected annotations
+        if (e.key === "Delete" || e.key === "Backspace") {
+          e.preventDefault();
+          deleteSelectedAnnotations();
+          return;
+        }
+
+        // Escape to clear selection
+        if (e.key === "Escape") {
+          e.preventDefault();
+          clearSelection();
+          return;
+        }
+      }
+
       // Find matching shortcut from settings
       const shortcutId = findShortcutByEvent(e);
 
@@ -339,6 +356,8 @@ function App() {
     setCurrentTool,
     handleToggleMindMapPanel,
     setSplitViewMode,
+    clearSelection,
+    deleteSelectedAnnotations,
   ]);
 
   // Handle opening mind map
