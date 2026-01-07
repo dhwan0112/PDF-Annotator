@@ -1,12 +1,12 @@
 [package]
-name = "pdf-annotator"
+name = "marginalia"
 version = "0.1.0"
-description = "A PDF annotation app with mind mapping and cloud sync"
+description = "A PDF annotation app with mind mapping, BibTeX management, and cloud sync"
 authors = ["you"]
 edition = "2021"
 
 [lib]
-name = "pdf_annotator_lib"
+name = "marginalia_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]

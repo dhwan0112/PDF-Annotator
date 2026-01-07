@@ -181,7 +181,7 @@ export const useSettingsStore = create<SettingsState>()(
       },
     }),
     {
-      name: "pdf-annotator-settings",
+      name: "marginalia-settings",
     }
   )
 );

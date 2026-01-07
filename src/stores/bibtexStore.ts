@@ -241,7 +241,7 @@ export const useBibtexStore = create<BibtexState>()(
       },
     }),
     {
-      name: "pdf-annotator-bibtex",
+      name: "marginalia-bibtex",
       storage: {
         getItem: (name) => {
           const str = localStorage.getItem(name);

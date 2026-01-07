@@ -124,7 +124,7 @@ export const useUiStore = create<UiState>()(
       setSplitViewMode: (mode) => set({ splitViewMode: mode }),
     }),
     {
-      name: "pdf-annotator-ui",
+      name: "marginalia-ui",
     }
   )
 );
@@ -152,7 +152,7 @@ function applyTheme(theme: Theme) {
 
 // Initialize theme on load
 if (typeof window !== "undefined") {
-  const stored = localStorage.getItem("pdf-annotator-ui");
+  const stored = localStorage.getItem("marginalia-ui");
   if (stored) {
     try {
       const { state } = JSON.parse(stored);

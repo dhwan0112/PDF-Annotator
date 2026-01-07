@@ -192,7 +192,7 @@ export const useTabStore = create<TabStoreState>()(
       },
     }),
     {
-      name: "pdf-annotator-tabs",
+      name: "marginalia-tabs",
     }
   )
 );

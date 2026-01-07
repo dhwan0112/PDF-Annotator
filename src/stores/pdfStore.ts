@@ -176,7 +176,7 @@ export const usePdfStore = create<PdfState>()(
   },
     }),
     {
-      name: "pdf-annotator-session",
+      name: "marginalia-session",
       partialize: (state) => ({
         filePath: state.filePath,
         metadata: state.metadata,

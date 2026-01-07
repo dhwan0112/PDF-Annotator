@@ -349,7 +349,7 @@ export const useMindMapStore = create<MindMapState>()(
       },
     }),
     {
-      name: "pdf-annotator-mind-maps",
+      name: "marginalia-mind-maps",
       partialize: (state) => ({
         mindMaps: Array.from(state.mindMaps.entries()),
       }),
