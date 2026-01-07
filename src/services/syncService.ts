@@ -13,6 +13,35 @@ export interface SyncData {
   mindMaps: Record<string, unknown>;
   studyGroups: Record<string, unknown>;
   settings: Record<string, unknown>;
+  library: LibrarySyncData | null;
+}
+
+// Library sync data (simplified version without full paths)
+export interface LibrarySyncData {
+  documents: SyncDocument[];
+  projects: SyncProject[];
+}
+
+export interface SyncDocument {
+  id: string;
+  fileName: string;  // Just the filename, not full path
+  title: string | null;
+  author: string | null;
+  pageCount: number | null;
+  lastPage: number;
+  projectId: string | null;
+  studyGroupId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SyncProject {
+  id: string;
+  name: string;
+  description: string | null;
+  color: string | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface SyncStatus {
@@ -31,6 +60,49 @@ export interface SyncConflict {
   remoteTimestamp: string;
 }
 
+// Extract filename from path (cross-platform)
+function getFileName(filePath: string): string {
+  return filePath.split(/[\\/]/).pop() || filePath;
+}
+
+// Convert path-keyed annotations to filename-keyed for sync
+function convertAnnotationsToFilenameKeys(annotations: Record<string, unknown>): Record<string, unknown> {
+  const result: Record<string, unknown> = {};
+  for (const [path, data] of Object.entries(annotations)) {
+    const fileName = getFileName(path);
+    result[fileName] = data;
+  }
+  return result;
+}
+
+// Convert filename-keyed annotations back to path-keyed (matching local files)
+function convertAnnotationsToPathKeys(
+  annotations: Record<string, unknown>,
+  localAnnotations: Record<string, unknown>
+): Record<string, unknown> {
+  const result: Record<string, unknown> = { ...localAnnotations };
+
+  // Create a map of filename -> local path
+  const fileNameToPath: Record<string, string> = {};
+  for (const path of Object.keys(localAnnotations)) {
+    const fileName = getFileName(path);
+    fileNameToPath[fileName] = path;
+  }
+
+  // Apply remote annotations using matched paths
+  for (const [fileName, data] of Object.entries(annotations)) {
+    if (fileNameToPath[fileName]) {
+      // Use existing local path
+      result[fileNameToPath[fileName]] = data;
+    } else {
+      // Keep filename as key for files not yet opened locally
+      result[fileName] = data;
+    }
+  }
+
+  return result;
+}
+
 // Collect all sync data from localStorage
 export function collectSyncData(): SyncData {
   const getData = (key: string) => {
@@ -42,28 +114,59 @@ export function collectSyncData(): SyncData {
     }
   };
 
+  // Get annotations and convert to filename-based keys for sync
+  const rawAnnotations = getData("marginalia-annotations") || {};
+  const filenameAnnotations = convertAnnotationsToFilenameKeys(rawAnnotations);
+
+  // Get bookmarks and convert to filename-based keys
+  const rawBookmarks = getData("marginalia-bookmarks") || {};
+  const filenameBookmarks = convertAnnotationsToFilenameKeys(rawBookmarks);
+
   return {
-    version: 1,
+    version: 2,  // Version 2 uses filename-based keys
     lastModified: new Date().toISOString(),
-    annotations: getData("marginalia-annotations") || {},
-    bookmarks: getData("marginalia-bookmarks") || {},
+    annotations: filenameAnnotations,
+    bookmarks: filenameBookmarks,
     bibtex: getData("marginalia-bibtex") || {},
     mindMaps: getData("marginalia-mind-maps") || {},
     studyGroups: getData("marginalia-study-groups") || {},
     settings: getData("marginalia-settings") || {},
+    library: null, // Library is synced separately via database
   };
 }
 
 // Apply sync data to localStorage
 export function applySyncData(data: SyncData): void {
+  const getData = (key: string) => {
+    try {
+      const item = localStorage.getItem(key);
+      return item ? JSON.parse(item) : {};
+    } catch {
+      return {};
+    }
+  };
+
   const setData = (key: string, value: unknown) => {
     if (value && Object.keys(value as object).length > 0) {
       localStorage.setItem(key, JSON.stringify(value));
     }
   };
 
-  setData("marginalia-annotations", data.annotations);
-  setData("marginalia-bookmarks", data.bookmarks);
+  // Convert filename-based keys back to path-based keys using local data
+  const localAnnotations = getData("marginalia-annotations");
+  const localBookmarks = getData("marginalia-bookmarks");
+
+  const mergedAnnotations = convertAnnotationsToPathKeys(
+    data.annotations as Record<string, unknown>,
+    localAnnotations
+  );
+  const mergedBookmarks = convertAnnotationsToPathKeys(
+    data.bookmarks as Record<string, unknown>,
+    localBookmarks
+  );
+
+  setData("marginalia-annotations", mergedAnnotations);
+  setData("marginalia-bookmarks", mergedBookmarks);
   setData("marginalia-bibtex", data.bibtex);
   setData("marginalia-mind-maps", data.mindMaps);
   setData("marginalia-study-groups", data.studyGroups);

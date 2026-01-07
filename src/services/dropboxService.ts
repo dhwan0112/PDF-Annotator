@@ -304,11 +304,170 @@ class DropboxService {
     }
   }
 
+  // Create a folder in Dropbox
+  async createFolder(path: string): Promise<void> {
+    await this.refreshTokenIfNeeded();
+
+    if (!this.config?.accessToken) {
+      throw new Error("Not authenticated");
+    }
+
+    const response = await fetch("https://api.dropboxapi.com/2/files/create_folder_v2", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${this.config.accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        path,
+        autorename: false,
+      }),
+    });
+
+    // Ignore error if folder already exists
+    if (!response.ok && response.status !== 409) {
+      const error = await response.text();
+      throw new Error(`Create folder failed: ${error}`);
+    }
+  }
+
+  // Upload a PDF file to Dropbox
+  async uploadFile(dropboxPath: string, fileData: ArrayBuffer): Promise<void> {
+    await this.refreshTokenIfNeeded();
+
+    if (!this.config?.accessToken) {
+      throw new Error("Not authenticated");
+    }
+
+    const response = await fetch(`${DROPBOX_CONTENT_URL}/files/upload`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${this.config.accessToken}`,
+        "Content-Type": "application/octet-stream",
+        "Dropbox-API-Arg": JSON.stringify({
+          path: dropboxPath,
+          mode: "overwrite",
+          autorename: false,
+          mute: true,
+        }),
+      },
+      body: fileData,
+    });
+
+    if (!response.ok) {
+      const error = await response.text();
+      throw new Error(`Upload file failed: ${error}`);
+    }
+  }
+
+  // Download a file from Dropbox
+  async downloadFile(dropboxPath: string): Promise<ArrayBuffer | null> {
+    await this.refreshTokenIfNeeded();
+
+    if (!this.config?.accessToken) {
+      throw new Error("Not authenticated");
+    }
+
+    const response = await fetch(`${DROPBOX_CONTENT_URL}/files/download`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${this.config.accessToken}`,
+        "Dropbox-API-Arg": JSON.stringify({
+          path: dropboxPath,
+        }),
+      },
+    });
+
+    if (response.status === 409) {
+      // File not found
+      return null;
+    }
+
+    if (!response.ok) {
+      const error = await response.text();
+      throw new Error(`Download file failed: ${error}`);
+    }
+
+    return await response.arrayBuffer();
+  }
+
+  // List files in a folder
+  async listFolder(path: string): Promise<DropboxFileEntry[]> {
+    await this.refreshTokenIfNeeded();
+
+    if (!this.config?.accessToken) {
+      throw new Error("Not authenticated");
+    }
+
+    const response = await fetch("https://api.dropboxapi.com/2/files/list_folder", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${this.config.accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        path: path || "",
+        recursive: false,
+        include_deleted: false,
+      }),
+    });
+
+    if (response.status === 409) {
+      // Folder not found
+      return [];
+    }
+
+    if (!response.ok) {
+      const error = await response.text();
+      throw new Error(`List folder failed: ${error}`);
+    }
+
+    const data = await response.json();
+    return data.entries.map((entry: { name: string; path_lower: string; ".tag": string }) => ({
+      name: entry.name,
+      path: entry.path_lower,
+      isFolder: entry[".tag"] === "folder",
+    }));
+  }
+
+  // Upload PDF for a study group
+  async uploadStudyGroupPdf(studyGroupName: string, fileName: string, fileData: ArrayBuffer): Promise<string> {
+    // Sanitize folder name
+    const safeName = studyGroupName.replace(/[<>:"/\\|?*]/g, "_");
+    const folderPath = `/Marginalia/${safeName}`;
+    const filePath = `${folderPath}/${fileName}`;
+
+    // Create folder if needed
+    await this.createFolder("/Marginalia");
+    await this.createFolder(folderPath);
+
+    // Upload file
+    await this.uploadFile(filePath, fileData);
+
+    return filePath;
+  }
+
+  // Get all PDFs for a study group
+  async getStudyGroupPdfs(studyGroupName: string): Promise<DropboxFileEntry[]> {
+    const safeName = studyGroupName.replace(/[<>:"/\\|?*]/g, "_");
+    const folderPath = `/Marginalia/${safeName}`;
+
+    const files = await this.listFolder(folderPath);
+    return files.filter((f) => !f.isFolder && f.name.toLowerCase().endsWith(".pdf"));
+  }
+
   // Disconnect from Dropbox
   disconnect(): void {
     this.config = null;
     this.saveConfig();
   }
+}
+
+// File entry type
+export interface DropboxFileEntry {
+  name: string;
+  path: string;
+  isFolder: boolean;
 }
 
 // Singleton instance
