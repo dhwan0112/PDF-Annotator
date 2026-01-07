@@ -7,7 +7,7 @@ fn main() {
     {
         std::panic::set_hook(Box::new(|panic_info| {
             if let Some(home) = std::env::var_os("USERPROFILE") {
-                let log_path = std::path::PathBuf::from(home).join("pdf-annotator-crash.log");
+                let log_path = std::path::PathBuf::from(home).join("marginalia-crash.log");
                 if let Ok(mut file) = std::fs::OpenOptions::new()
                     .create(true)
                     .append(true)
@@ -21,5 +21,5 @@ fn main() {
         }));
     }
 
-    pdf_annotator_lib::run()
+    marginalia_lib::run()
 }

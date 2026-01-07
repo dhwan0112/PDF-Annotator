@@ -1,7 +1,6 @@
 // PDF processing module
 use lopdf::Document;
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ExtendedPdfMetadata {
