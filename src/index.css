@@ -1,5 +1,8 @@
 @import "tailwindcss";
 
+/* Enable class-based dark mode for Tailwind v4 */
+@custom-variant dark (&:where(.dark, .dark *));
+
 @theme {
   /* Custom theme colors for PDF Annotator */
   --color-primary: #3b82f6;
@@ -21,9 +24,14 @@
 
 /* Dark mode theme overrides */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not(.light) {
     color-scheme: dark;
   }
+}
+
+/* Light mode class-based */
+.light {
+  color-scheme: light;
 }
 
 /* Dark mode class-based toggle */
