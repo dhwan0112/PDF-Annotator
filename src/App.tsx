@@ -403,7 +403,12 @@ function App() {
 
   // Handle drag start for selected annotations
   const handleAnnotationDragStart = useCallback((e: React.DragEvent) => {
-    if (selectedAnnotationIds.size === 0) return;
+    console.log("[App] Annotation drag start, selectedAnnotationIds:", selectedAnnotationIds.size);
+
+    if (selectedAnnotationIds.size === 0) {
+      console.log("[App] No annotations selected, cancelling drag");
+      return;
+    }
 
     // Get document info from active tab
     const activeTab = getActiveTab();
@@ -415,8 +420,10 @@ function App() {
       filePath: filePath,
     };
 
+    console.log("[App] Setting drag data:", dragData);
     e.dataTransfer.setData("application/json", JSON.stringify(dragData));
-    e.dataTransfer.effectAllowed = "copy";
+    e.dataTransfer.setData("text/plain", "annotation-drag"); // Fallback
+    e.dataTransfer.effectAllowed = "copyMove";
 
     // CRITICAL: Add global handler IMMEDIATELY to prevent forbidden cursor
     // Without this, the browser shows forbidden cursor on all non-drop-zone elements

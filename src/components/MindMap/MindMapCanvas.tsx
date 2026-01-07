@@ -242,20 +242,27 @@ export function MindMapCanvas({ mindMapId, studyGroupId, onClose, onOpenDocument
   // Handle drag and drop from PDF viewer
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
+    e.stopPropagation();
     e.dataTransfer.dropEffect = "copy";
     setIsDragOver(true);
   }, []);
 
   const handleDragLeave = useCallback((e: React.DragEvent) => {
     e.preventDefault();
-    setIsDragOver(false);
+    e.stopPropagation();
+    // Only set to false if leaving the actual canvas, not a child element
+    if (e.currentTarget === e.target) {
+      setIsDragOver(false);
+    }
   }, []);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
+    e.stopPropagation();
     setIsDragOver(false);
 
     const data = e.dataTransfer.getData("application/json");
+    console.log("[MindMapCanvas] Drop received, data:", data);
     if (!data) return;
 
     try {
