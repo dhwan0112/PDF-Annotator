@@ -1,6 +1,7 @@
-import { useState } from "react";
-import { useStudyGroupStore, useLibraryStore, useMindMapStore } from "../../stores";
+import { useState, useCallback } from "react";
+import { useStudyGroupStore, useLibraryStore, useMindMapStore, useBibtexStore } from "../../stores";
 import type { StudyGroup } from "../../types";
+import { downloadBibFile } from "../../services/bibtexService";
 import {
   FolderPlus,
   Folder,
@@ -14,6 +15,7 @@ import {
   ChevronRight,
   X,
   Check,
+  Download,
 } from "lucide-react";
 
 interface StudyGroupSidebarProps {
@@ -39,6 +41,7 @@ export function StudyGroupSidebar({ onOpenDocument, onOpenMindMap }: StudyGroupS
   } = useStudyGroupStore();
   const { documents } = useLibraryStore();
   const { getMindMapsForGroup, createMindMap } = useMindMapStore();
+  const { exportAsBibTeX, hasEntry } = useBibtexStore();
 
   const [isCreating, setIsCreating] = useState(false);
   const [newGroupName, setNewGroupName] = useState("");
@@ -96,6 +99,22 @@ export function StudyGroupSidebar({ onOpenDocument, onOpenMindMap }: StudyGroupS
   const getDocumentById = (docId: string) => {
     return documents.find((d) => d.id === docId);
   };
+
+  // Export BibTeX for a study group
+  const handleExportBibTeX = useCallback((groupId: string) => {
+    const group = studyGroups.find((g) => g.id === groupId);
+    if (!group) return;
+
+    const docIdsWithBibtex = group.documentIds.filter((id) => hasEntry(id));
+    if (docIdsWithBibtex.length === 0) {
+      alert("No BibTeX entries found for documents in this group.\n\nAdd BibTeX metadata to documents first.");
+      return;
+    }
+
+    const bibtex = exportAsBibTeX(docIdsWithBibtex);
+    const filename = `${group.name.replace(/[^a-zA-Z0-9]/g, "_")}.bib`;
+    downloadBibFile(bibtex, filename);
+  }, [studyGroups, hasEntry, exportAsBibTeX]);
 
   return (
     <div className="w-64 border-r border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 flex flex-col h-full">
@@ -305,6 +324,14 @@ export function StudyGroupSidebar({ onOpenDocument, onOpenMindMap }: StudyGroupS
                     >
                       <Network className="w-3 h-3 mr-1" />
                       Mind Map
+                    </button>
+                    <button
+                      onClick={() => handleExportBibTeX(group.id)}
+                      className="flex items-center px-2 py-1 text-xs text-green-600 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-900/30 rounded"
+                      title="Export BibTeX for this group"
+                    >
+                      <Download className="w-3 h-3 mr-1" />
+                      .bib
                     </button>
                   </div>
 

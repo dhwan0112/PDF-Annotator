@@ -6,6 +6,7 @@ import {
   FolderInput,
   Tag as TagIcon,
   Clock,
+  BookOpen,
 } from "lucide-react";
 import type { Document, Project, Tag } from "../../stores";
 
@@ -19,6 +20,7 @@ interface DocumentCardProps {
   onDelete: (docId: string) => void;
   onSetProject: (docId: string, projectId: string | null) => void;
   onToggleTag: (docId: string, tagId: string, hasTag: boolean) => void;
+  onShowBibTeX?: (doc: Document) => void;
 }
 
 export function DocumentCard({
@@ -31,6 +33,7 @@ export function DocumentCard({
   onDelete,
   onSetProject,
   onToggleTag,
+  onShowBibTeX,
 }: DocumentCardProps) {
   const [showMenu, setShowMenu] = useState(false);
   const [showProjectMenu, setShowProjectMenu] = useState(false);
@@ -119,6 +122,10 @@ export function DocumentCard({
                 setShowMenu(false);
                 setShowTagMenu(true);
               }}
+              onShowBibTeX={onShowBibTeX ? () => {
+                setShowMenu(false);
+                onShowBibTeX(document);
+              } : undefined}
               onDelete={() => {
                 setShowMenu(false);
                 onDelete(document.id);
@@ -188,6 +195,10 @@ export function DocumentCard({
                 setShowMenu(false);
                 setShowTagMenu(true);
               }}
+              onShowBibTeX={onShowBibTeX ? () => {
+                setShowMenu(false);
+                onShowBibTeX(document);
+              } : undefined}
               onDelete={() => {
                 setShowMenu(false);
                 onDelete(document.id);
@@ -276,11 +287,13 @@ function DocumentMenu({
   onClose,
   onShowProject,
   onShowTags,
+  onShowBibTeX,
   onDelete,
 }: {
   onClose: () => void;
   onShowProject: () => void;
   onShowTags: () => void;
+  onShowBibTeX?: () => void;
   onDelete: () => void;
 }) {
   return (
@@ -307,6 +320,18 @@ function DocumentMenu({
           <TagIcon className="w-4 h-4" />
           Manage Tags
         </button>
+        {onShowBibTeX && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onShowBibTeX();
+            }}
+            className="w-full px-4 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
+          >
+            <BookOpen className="w-4 h-4" />
+            BibTeX Metadata
+          </button>
+        )}
         <hr className="my-1 border-gray-200 dark:border-gray-700" />
         <button
           onClick={(e) => {

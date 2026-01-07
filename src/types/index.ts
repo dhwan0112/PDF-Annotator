@@ -115,3 +115,59 @@ export interface MindMap {
   createdAt: Date;
   updatedAt: Date;
 }
+
+// BibTeX entry types
+export type BibTeXEntryType =
+  | "article"      // Journal article
+  | "inproceedings" // Conference paper
+  | "book"         // Book
+  | "incollection" // Book chapter
+  | "phdthesis"    // PhD thesis
+  | "mastersthesis" // Master's thesis
+  | "techreport"   // Technical report
+  | "misc";        // Miscellaneous
+
+// BibTeX metadata for academic papers
+export interface BibTeXMetadata {
+  // Entry identification
+  entryType: BibTeXEntryType;
+  citeKey: string;           // e.g., "Kim2024deeplearning"
+
+  // Required fields
+  title: string;
+  authors: string[];         // ["Kim, Minjun", "Lee, Soyeon"]
+  year?: number;
+
+  // Journal article fields
+  journal?: string;
+  volume?: string;
+  number?: string;           // Issue number
+  pages?: string;            // e.g., "123--156"
+
+  // Conference fields
+  booktitle?: string;        // Conference name for inproceedings
+
+  // Book fields
+  publisher?: string;
+  edition?: string;
+
+  // Thesis fields
+  school?: string;
+
+  // Technical report fields
+  institution?: string;
+
+  // Common optional fields
+  doi?: string;
+  url?: string;
+  isbn?: string;
+  issn?: string;
+  abstract?: string;
+  keywords?: string[];
+  note?: string;
+
+  // Extraction metadata
+  extractedAt?: Date;
+  extractionMethod?: "manual" | "metadata" | "doi_lookup" | "text_parsing";
+  confidence?: number;       // 0-1, how confident is the extraction
+}

@@ -42,6 +42,8 @@ pub fn run() {
             // File commands
             file::open_file_dialog,
             file::read_pdf_metadata,
+            file::read_pdf_metadata_extended,
+            file::extract_pdf_text,
             file::save_annotations,
             file::load_annotations,
             file::delete_annotations,
