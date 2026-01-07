@@ -152,6 +152,38 @@ function App() {
     setViewMode(tab.viewMode);
   }, [setFilePath, setCurrentPage, setZoomLevel, setViewMode]);
 
+  // Get active study group's first mind map for split panel view
+  // Use the currently active tab's study group
+  const { getMindMapsForGroup, getMindMap, createMindMap } = useMindMapStore();
+  const activeTab = getActiveTab();
+  const activeTabGroupId = activeTab?.groupId || null;
+
+  // Get or create mind map for the active tab's study group
+  const getOrCreateMindMapForGroup = useCallback((groupId: string) => {
+    const mindMaps = getMindMapsForGroup(groupId);
+    if (mindMaps.length > 0) {
+      return mindMaps[0].id;
+    }
+    // Create a new mind map for this group
+    const group = useStudyGroupStore.getState().studyGroups.find(g => g.id === groupId);
+    const newId = createMindMap(groupId, `${group?.name || "Study"} Mind Map`);
+    return newId;
+  }, [getMindMapsForGroup, createMindMap]);
+
+  // Mind map ID for split panel - based on active tab's group
+  const splitPanelMindMapId = activeTabGroupId
+    ? getMindMapsForGroup(activeTabGroupId)[0]?.id || null
+    : null;
+
+  // Handle toggle mind map panel - create if needed
+  const handleToggleMindMapPanel = useCallback(() => {
+    if (!mindMapPanelVisible && activeTabGroupId) {
+      // Opening panel - ensure mind map exists
+      getOrCreateMindMapForGroup(activeTabGroupId);
+    }
+    toggleMindMapPanel();
+  }, [mindMapPanelVisible, activeTabGroupId, getOrCreateMindMapForGroup, toggleMindMapPanel]);
+
   // Keyboard shortcuts (customizable via settings)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -253,7 +285,7 @@ function App() {
         // Feature shortcuts
         switch (shortcutId) {
           case "feature.toggleMindMap":
-            toggleMindMapPanel();
+            handleToggleMindMapPanel();
             break;
         }
       }
@@ -274,7 +306,7 @@ function App() {
     goToFirstPage,
     goToLastPage,
     setCurrentTool,
-    toggleMindMapPanel,
+    handleToggleMindMapPanel,
   ]);
 
   // Handle opening mind map
@@ -288,13 +320,6 @@ function App() {
     setActiveMindMapId(null);
     setCurrentView("library");
   }, [setActiveMindMapId, setCurrentView]);
-
-  // Get active study group's first mind map for split panel view
-  const { activeStudyGroupId } = useStudyGroupStore();
-  const { getMindMapsForGroup, getMindMap } = useMindMapStore();
-  const splitPanelMindMapId = activeStudyGroupId
-    ? getMindMapsForGroup(activeStudyGroupId)[0]?.id || null
-    : activeMindMapId;
 
   // Get studyGroupId for standalone mindmap view
   const activeMindMapStudyGroupId = activeMindMapId
@@ -320,16 +345,36 @@ function App() {
               <PdfViewer pdfDocument={pdfDocument} />
             </main>
             {/* Mind Map Split Panel */}
-            {mindMapPanelVisible && splitPanelMindMapId && (
+            {mindMapPanelVisible && (
               <div
-                className="border-l border-gray-200 dark:border-gray-700 flex-shrink-0"
+                className="border-l border-gray-200 dark:border-gray-700 flex-shrink-0 flex flex-col"
                 style={{ width: mindMapPanelWidth }}
               >
-                <MindMapCanvas
-                  mindMapId={splitPanelMindMapId}
-                  studyGroupId={activeStudyGroupId || ""}
-                  onClose={toggleMindMapPanel}
-                />
+                {splitPanelMindMapId && activeTabGroupId ? (
+                  <MindMapCanvas
+                    mindMapId={splitPanelMindMapId}
+                    studyGroupId={activeTabGroupId}
+                    onClose={handleToggleMindMapPanel}
+                  />
+                ) : (
+                  <div className="flex-1 flex flex-col items-center justify-center p-4 bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400">
+                    <div className="text-center">
+                      <p className="text-lg font-medium mb-2">마인드맵 없음</p>
+                      <p className="text-sm mb-4">
+                        현재 PDF가 스터디 그룹에 속해있지 않습니다.
+                      </p>
+                      <p className="text-xs">
+                        탭을 우클릭하여 그룹에 추가하세요.
+                      </p>
+                    </div>
+                    <button
+                      onClick={handleToggleMindMapPanel}
+                      className="mt-4 px-3 py-1.5 text-sm bg-gray-200 dark:bg-gray-700 rounded hover:bg-gray-300 dark:hover:bg-gray-600"
+                    >
+                      닫기
+                    </button>
+                  </div>
+                )}
               </div>
             )}
           </>
