@@ -1,7 +1,7 @@
 import { useRef, useEffect, useCallback, useState } from "react";
 import { getStroke } from "perfect-freehand";
 import { useAnnotationStore } from "../../stores";
-import type { InkAnnotation, HighlighterInkAnnotation, RectAnnotation, ArrowAnnotation, Point, Stroke, Rect } from "../../types";
+import type { InkAnnotation, HighlighterInkAnnotation, RectAnnotation, ArrowAnnotation, HighlightAnnotation, UnderlineAnnotation, StrikeoutAnnotation, NoteAnnotation, TextBoxAnnotation, Point, Stroke, Rect, Annotation } from "../../types";
 
 interface AnnotationCanvasProps {
   pageNumber: number;
@@ -38,7 +38,7 @@ export function AnnotationCanvas({
   marginOffset = 0,
 }: AnnotationCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const { currentTool, getCurrentColor, getStrokeWidth, getHighlightOpacity, addAnnotation, deleteAnnotation, getAnnotationsForPage, getArrowSettings } =
+  const { currentTool, getCurrentColor, getStrokeWidth, getHighlightOpacity, addAnnotation, deleteAnnotation, getAnnotationsForPage, getArrowSettings, selectAnnotations, clearSelection, selectedAnnotationIds } =
     useAnnotationStore();
   const currentColor = getCurrentColor();
   const strokeWidth = getStrokeWidth();
@@ -50,6 +50,7 @@ export function AnnotationCanvas({
   const erasedIdsRef = useRef<Set<string>>(new Set()); // Track erased annotations to avoid double-delete
   const [rectPreview, setRectPreview] = useState<RectPreview | null>(null);
   const [arrowPreview, setArrowPreview] = useState<ArrowPreview | null>(null);
+  const [lassoPoints, setLassoPoints] = useState<Point[]>([]);
 
   // Get annotations for this page
   const annotations = getAnnotationsForPage(pageNumber);
@@ -151,6 +152,134 @@ export function AnnotationCanvas({
     },
     [inkAnnotations, highlighterInkAnnotations, rectAnnotations, arrowAnnotations]
   );
+
+  // Check if a point is inside a polygon (ray casting algorithm)
+  const isPointInPolygon = useCallback((point: Point, polygon: Point[]): boolean => {
+    if (polygon.length < 3) return false;
+
+    let inside = false;
+    for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+      const xi = polygon[i].x, yi = polygon[i].y;
+      const xj = polygon[j].x, yj = polygon[j].y;
+
+      if (((yi > point.y) !== (yj > point.y)) &&
+          (point.x < (xj - xi) * (point.y - yi) / (yj - yi) + xi)) {
+        inside = !inside;
+      }
+    }
+    return inside;
+  }, []);
+
+  // Get bounding box for an annotation
+  const getAnnotationBounds = useCallback((annotation: Annotation): Rect | null => {
+    switch (annotation.type) {
+      case "ink":
+      case "highlighterInk": {
+        const typedAnnotation = annotation as InkAnnotation | HighlighterInkAnnotation;
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+        for (const stroke of typedAnnotation.strokes) {
+          for (const p of stroke.points) {
+            minX = Math.min(minX, p.x);
+            minY = Math.min(minY, p.y);
+            maxX = Math.max(maxX, p.x);
+            maxY = Math.max(maxY, p.y);
+          }
+        }
+        if (minX === Infinity) return null;
+        return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
+      }
+      case "rect": {
+        const rectAnnotation = annotation as RectAnnotation;
+        return rectAnnotation.rect;
+      }
+      case "arrow": {
+        const arrowAnnotation = annotation as ArrowAnnotation;
+        const minX = Math.min(arrowAnnotation.start.x, arrowAnnotation.end.x);
+        const minY = Math.min(arrowAnnotation.start.y, arrowAnnotation.end.y);
+        const maxX = Math.max(arrowAnnotation.start.x, arrowAnnotation.end.x);
+        const maxY = Math.max(arrowAnnotation.start.y, arrowAnnotation.end.y);
+        return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
+      }
+      case "highlight":
+      case "underline":
+      case "strikeout": {
+        const textAnnotation = annotation as HighlightAnnotation | UnderlineAnnotation | StrikeoutAnnotation;
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+        for (const rect of textAnnotation.rects) {
+          minX = Math.min(minX, rect.x);
+          minY = Math.min(minY, rect.y);
+          maxX = Math.max(maxX, rect.x + rect.width);
+          maxY = Math.max(maxY, rect.y + rect.height);
+        }
+        if (minX === Infinity) return null;
+        return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
+      }
+      case "note": {
+        const noteAnnotation = annotation as NoteAnnotation;
+        // Note icons are typically 24x24 pixels, convert to PDF units
+        const size = 24 / scale;
+        return { x: noteAnnotation.position.x, y: noteAnnotation.position.y, width: size, height: size };
+      }
+      case "textbox": {
+        const textBoxAnnotation = annotation as TextBoxAnnotation;
+        return {
+          x: textBoxAnnotation.position.x,
+          y: textBoxAnnotation.position.y,
+          width: textBoxAnnotation.width,
+          height: textBoxAnnotation.height,
+        };
+      }
+      default:
+        return null;
+    }
+  }, [scale]);
+
+  // Check if annotation intersects with lasso polygon
+  const isAnnotationInLasso = useCallback((annotation: Annotation, lasso: Point[]): boolean => {
+    if (lasso.length < 3) return false;
+
+    const bounds = getAnnotationBounds(annotation);
+    if (!bounds) return false;
+
+    // Check if any corner of the bounding box is inside the lasso
+    const corners: Point[] = [
+      { x: bounds.x, y: bounds.y },
+      { x: bounds.x + bounds.width, y: bounds.y },
+      { x: bounds.x + bounds.width, y: bounds.y + bounds.height },
+      { x: bounds.x, y: bounds.y + bounds.height },
+    ];
+
+    // If any corner is inside, the annotation is selected
+    for (const corner of corners) {
+      if (isPointInPolygon(corner, lasso)) {
+        return true;
+      }
+    }
+
+    // Also check the center point
+    const center: Point = {
+      x: bounds.x + bounds.width / 2,
+      y: bounds.y + bounds.height / 2,
+    };
+    if (isPointInPolygon(center, lasso)) {
+      return true;
+    }
+
+    return false;
+  }, [getAnnotationBounds, isPointInPolygon]);
+
+  // Find all annotations within lasso
+  const findAnnotationsInLasso = useCallback((lasso: Point[]): string[] => {
+    const selectedIds: string[] = [];
+
+    for (const annotation of annotations) {
+      if (isAnnotationInLasso(annotation, lasso)) {
+        selectedIds.push(annotation.id);
+      }
+    }
+
+    return selectedIds;
+  }, [annotations, isAnnotationInLasso]);
 
   // Erase annotation at point
   const eraseAtPoint = useCallback(
@@ -502,7 +631,52 @@ export function AnnotationCanvas({
         true
       );
     }
-  }, [inkAnnotations, highlighterInkAnnotations, rectAnnotations, arrowAnnotations, currentTool, currentColor, strokeWidth, highlightOpacity, arrowSettings, drawStroke, drawRect, drawArrow, rectPreview, arrowPreview]);
+
+    // Draw lasso selection path
+    if (lassoPoints.length > 1) {
+      ctx.save();
+      ctx.strokeStyle = "#3b82f6";
+      ctx.lineWidth = 2;
+      ctx.setLineDash([5, 5]);
+      ctx.globalAlpha = 0.8;
+      ctx.beginPath();
+      ctx.moveTo(lassoPoints[0].x * scale + marginOffset, lassoPoints[0].y * scale);
+      for (let i = 1; i < lassoPoints.length; i++) {
+        ctx.lineTo(lassoPoints[i].x * scale + marginOffset, lassoPoints[i].y * scale);
+      }
+      // Close path back to start
+      ctx.lineTo(lassoPoints[0].x * scale + marginOffset, lassoPoints[0].y * scale);
+      ctx.stroke();
+
+      // Fill with semi-transparent blue
+      ctx.fillStyle = "#3b82f6";
+      ctx.globalAlpha = 0.1;
+      ctx.fill();
+      ctx.restore();
+    }
+
+    // Draw selection highlight for selected annotations on this page
+    if (selectedAnnotationIds.size > 0) {
+      ctx.save();
+      ctx.strokeStyle = "#3b82f6";
+      ctx.lineWidth = 2;
+      ctx.setLineDash([4, 4]);
+
+      for (const annotation of annotations) {
+        if (selectedAnnotationIds.has(annotation.id)) {
+          const bounds = getAnnotationBounds(annotation);
+          if (bounds) {
+            const x = bounds.x * scale + marginOffset - 4;
+            const y = bounds.y * scale - 4;
+            const w = bounds.width * scale + 8;
+            const h = bounds.height * scale + 8;
+            ctx.strokeRect(x, y, w, h);
+          }
+        }
+      }
+      ctx.restore();
+    }
+  }, [inkAnnotations, highlighterInkAnnotations, rectAnnotations, arrowAnnotations, currentTool, currentColor, strokeWidth, highlightOpacity, arrowSettings, drawStroke, drawRect, drawArrow, rectPreview, arrowPreview, lassoPoints, scale, marginOffset, selectedAnnotationIds, annotations, getAnnotationBounds]);
 
   // Re-render when annotations change
   useEffect(() => {
@@ -512,7 +686,7 @@ export function AnnotationCanvas({
   // Handle pointer events
   const handlePointerDown = useCallback(
     (e: React.PointerEvent) => {
-      const drawingTools = ["pen", "highlighter", "eraser", "rect", "arrow"];
+      const drawingTools = ["pen", "highlighter", "eraser", "rect", "arrow", "select"];
       if (!drawingTools.includes(currentTool)) return;
 
       e.preventDefault();
@@ -527,7 +701,11 @@ export function AnnotationCanvas({
 
       isDrawingRef.current = true;
 
-      if (currentTool === "eraser") {
+      if (currentTool === "select") {
+        // Start lasso selection
+        setLassoPoints([pdfPoint]);
+        clearSelection();
+      } else if (currentTool === "eraser") {
         // Clear tracked erased IDs for new eraser stroke
         erasedIdsRef.current.clear();
         eraseAtPoint(pdfPoint);
@@ -552,7 +730,7 @@ export function AnnotationCanvas({
         currentStrokeRef.current = [point];
       }
     },
-    [currentTool, screenToPdf, eraseAtPoint]
+    [currentTool, screenToPdf, eraseAtPoint, clearSelection]
   );
 
   const handlePointerMove = useCallback(
@@ -566,7 +744,11 @@ export function AnnotationCanvas({
       const y = e.clientY - canvasRect.top;
       const pdfPoint = screenToPdf(x, y);
 
-      if (currentTool === "eraser") {
+      if (currentTool === "select") {
+        // Add point to lasso path
+        setLassoPoints((prev) => [...prev, pdfPoint]);
+        renderAnnotations();
+      } else if (currentTool === "eraser") {
         eraseAtPoint(pdfPoint);
       } else if (currentTool === "rect") {
         setRectPreview((prev) =>
@@ -596,6 +778,19 @@ export function AnnotationCanvas({
 
       e.currentTarget.releasePointerCapture(e.pointerId);
       isDrawingRef.current = false;
+
+      if (currentTool === "select") {
+        // Complete lasso selection
+        if (lassoPoints.length >= 3) {
+          const selectedIds = findAnnotationsInLasso(lassoPoints);
+          if (selectedIds.length > 0) {
+            selectAnnotations(selectedIds);
+          }
+        }
+        setLassoPoints([]);
+        renderAnnotations();
+        return;
+      }
 
       if (currentTool === "eraser") {
         // Eraser actions are handled in pointer down/move, just cleanup
@@ -689,7 +884,7 @@ export function AnnotationCanvas({
       currentStrokeRef.current = [];
       renderAnnotations();
     },
-    [currentTool, currentColor, strokeWidth, highlightOpacity, pageNumber, addAnnotation, renderAnnotations, rectPreview, arrowPreview, arrowSettings, scale]
+    [currentTool, currentColor, strokeWidth, highlightOpacity, pageNumber, addAnnotation, renderAnnotations, rectPreview, arrowPreview, arrowSettings, scale, lassoPoints, findAnnotationsInLasso, selectAnnotations]
   );
 
   const handlePointerCancel = useCallback(() => {
@@ -697,10 +892,11 @@ export function AnnotationCanvas({
     currentStrokeRef.current = [];
     setRectPreview(null);
     setArrowPreview(null);
+    setLassoPoints([]);
     renderAnnotations();
   }, [renderAnnotations]);
 
-  const isInteractive = ["pen", "highlighter", "eraser", "rect", "arrow"].includes(currentTool);
+  const isInteractive = ["pen", "highlighter", "eraser", "rect", "arrow", "select"].includes(currentTool);
 
   return (
     <canvas

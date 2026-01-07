@@ -75,6 +75,8 @@ export interface MindMapNode {
   sourceType: "margin_note" | "annotation" | "custom";
   sourceId?: string; // MarginNote.id or Annotation.id
   documentId?: string;
+  filePath?: string; // File path for opening the document
+  pageNumber?: number; // Page number for navigation
   // Position in mind map canvas
   x: number;
   y: number;

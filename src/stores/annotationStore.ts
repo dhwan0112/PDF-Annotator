@@ -36,7 +36,9 @@ interface AnnotationState {
   // Arrow-specific settings
   arrowSettings: ArrowSettings;
 
-  // Selection
+  // Selection (multi-select support)
+  selectedAnnotationIds: Set<string>;
+  // Backwards compatibility - returns first selected or null
   selectedAnnotationId: string | null;
 
   // Undo/Redo
@@ -67,6 +69,14 @@ interface AnnotationState {
   updateAnnotation: (id: string, updates: Partial<Annotation>) => void;
   deleteAnnotation: (id: string) => void;
   selectAnnotation: (id: string | null) => void;
+  // Multi-select methods
+  selectAnnotations: (ids: string[]) => void;
+  addToSelection: (id: string) => void;
+  removeFromSelection: (id: string) => void;
+  toggleSelection: (id: string) => void;
+  clearSelection: () => void;
+  isAnnotationSelected: (id: string) => boolean;
+  getSelectedAnnotations: () => Annotation[];
   getAnnotationsForPage: (pageNumber: number) => Annotation[];
   undo: () => void;
   redo: () => void;
@@ -123,6 +133,7 @@ export const useAnnotationStore = create<AnnotationState>()(
       lastDrawingTool: "pen",
       toolSettings: { ...DEFAULT_TOOL_SETTINGS },
       arrowSettings: { ...DEFAULT_ARROW_SETTINGS },
+      selectedAnnotationIds: new Set<string>(),
       selectedAnnotationId: null,
       undoStack: [],
       redoStack: [],
@@ -256,7 +267,7 @@ export const useAnnotationStore = create<AnnotationState>()(
       },
 
       deleteAnnotation: (id) => {
-        const { annotations, undoStack } = get();
+        const { annotations, undoStack, selectedAnnotationIds } = get();
         const newAnnotations = new Map(annotations);
 
         for (const [pageNum, pageAnnotations] of annotations) {
@@ -266,9 +277,14 @@ export const useAnnotationStore = create<AnnotationState>()(
             const newPageAnnotations = pageAnnotations.filter((a) => a.id !== id);
             newAnnotations.set(pageNum, newPageAnnotations);
 
+            // Remove from selection
+            const newSelectedIds = new Set(selectedAnnotationIds);
+            newSelectedIds.delete(id);
+
             set({
               annotations: newAnnotations,
-              selectedAnnotationId: null,
+              selectedAnnotationIds: newSelectedIds,
+              selectedAnnotationId: newSelectedIds.size > 0 ? Array.from(newSelectedIds)[0] : null,
               undoStack: [...undoStack, { type: "delete", annotation: deleted }],
               redoStack: [],
             });
@@ -277,7 +293,76 @@ export const useAnnotationStore = create<AnnotationState>()(
         }
       },
 
-      selectAnnotation: (id) => set({ selectedAnnotationId: id }),
+      selectAnnotation: (id) => {
+        if (id === null) {
+          set({ selectedAnnotationIds: new Set(), selectedAnnotationId: null });
+        } else {
+          set({ selectedAnnotationIds: new Set([id]), selectedAnnotationId: id });
+        }
+      },
+
+      selectAnnotations: (ids) => {
+        const newSet = new Set(ids);
+        set({
+          selectedAnnotationIds: newSet,
+          selectedAnnotationId: ids.length > 0 ? ids[0] : null,
+        });
+      },
+
+      addToSelection: (id) => {
+        const { selectedAnnotationIds } = get();
+        const newSet = new Set(selectedAnnotationIds);
+        newSet.add(id);
+        set({
+          selectedAnnotationIds: newSet,
+          selectedAnnotationId: newSet.size > 0 ? Array.from(newSet)[0] : null,
+        });
+      },
+
+      removeFromSelection: (id) => {
+        const { selectedAnnotationIds } = get();
+        const newSet = new Set(selectedAnnotationIds);
+        newSet.delete(id);
+        set({
+          selectedAnnotationIds: newSet,
+          selectedAnnotationId: newSet.size > 0 ? Array.from(newSet)[0] : null,
+        });
+      },
+
+      toggleSelection: (id) => {
+        const { selectedAnnotationIds } = get();
+        const newSet = new Set(selectedAnnotationIds);
+        if (newSet.has(id)) {
+          newSet.delete(id);
+        } else {
+          newSet.add(id);
+        }
+        set({
+          selectedAnnotationIds: newSet,
+          selectedAnnotationId: newSet.size > 0 ? Array.from(newSet)[0] : null,
+        });
+      },
+
+      clearSelection: () => {
+        set({ selectedAnnotationIds: new Set(), selectedAnnotationId: null });
+      },
+
+      isAnnotationSelected: (id) => {
+        return get().selectedAnnotationIds.has(id);
+      },
+
+      getSelectedAnnotations: () => {
+        const { annotations, selectedAnnotationIds } = get();
+        const selected: Annotation[] = [];
+        for (const pageAnnotations of annotations.values()) {
+          for (const annotation of pageAnnotations) {
+            if (selectedAnnotationIds.has(annotation.id)) {
+              selected.push(annotation);
+            }
+          }
+        }
+        return selected;
+      },
 
       getAnnotationsForPage: (pageNumber) => {
         const { annotations } = get();
@@ -385,6 +470,7 @@ export const useAnnotationStore = create<AnnotationState>()(
       clearAnnotations: () =>
         set({
           annotations: new Map(),
+          selectedAnnotationIds: new Set(),
           selectedAnnotationId: null,
           undoStack: [],
           redoStack: [],

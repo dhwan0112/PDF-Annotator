@@ -1,4 +1,4 @@
-import { useEffect, useCallback } from "react";
+import { useEffect, useCallback, useState, useRef } from "react";
 import { Toolbar, TabBar } from "./components/Toolbar";
 import { Sidebar } from "./components/Sidebar";
 import { PdfViewer } from "./components/PdfViewer";
@@ -6,9 +6,10 @@ import { Library } from "./components/Library";
 import { MindMapCanvas } from "./components/MindMap";
 import { useUiStore, usePdfStore, useAnnotationStore, useLibraryStore, useSettingsStore, useStudyGroupStore, useMindMapStore, useTabStore } from "./stores";
 import { usePdfDocument, useAnnotationPersistence, useBookmarkPersistence, useAutoSave, usePenTablet, useSessionRestore } from "./hooks";
+import { GripVertical, Network } from "lucide-react";
 
 function App() {
-  const { theme, currentView, setCurrentView, activeMindMapId, setActiveMindMapId, mindMapPanelVisible, toggleMindMapPanel, mindMapPanelWidth } = useUiStore();
+  const { theme, currentView, setCurrentView, activeMindMapId, setActiveMindMapId, mindMapPanelVisible, toggleMindMapPanel, mindMapPanelWidth, setMindMapPanelWidth } = useUiStore();
   const { pdfDocument } = usePdfDocument();
   const { filePath, setFilePath, currentPage, setCurrentPage, setZoomLevel, setViewMode } = usePdfStore();
   const { addDocument, updateDocumentProgress } = useLibraryStore();
@@ -28,7 +29,7 @@ function App() {
     goToFirstPage,
     goToLastPage,
   } = usePdfStore();
-  const { undo, redo, setCurrentTool } = useAnnotationStore();
+  const { undo, redo, setCurrentTool, selectedAnnotationIds, clearSelection } = useAnnotationStore();
   const { findShortcutByEvent } = useSettingsStore();
 
   // Apply theme on mount and when it changes
@@ -119,6 +120,25 @@ function App() {
     setFilePath(documentPath);
     setCurrentView("viewer");
   }, [openTab, setFilePath, setCurrentView, documents, getGroupForDocument]);
+
+  // Handle opening document from mind map node (with optional page number)
+  const handleOpenDocumentAtPage = useCallback((documentPath: string, pageNumber?: number) => {
+    // Find the document in library to get its ID
+    const doc = documents.find((d) => d.file_path === documentPath);
+    const documentId = doc?.id || null;
+
+    // Find the study group this document belongs to
+    const studyGroup = documentId ? getGroupForDocument(documentId) : undefined;
+    const groupId = studyGroup?.id || null;
+
+    // Open in a new tab (or switch to existing tab)
+    openTab(documentPath, null, documentId, groupId);
+    setFilePath(documentPath);
+    if (pageNumber) {
+      setCurrentPage(pageNumber);
+    }
+    setCurrentView("viewer");
+  }, [openTab, setFilePath, setCurrentView, setCurrentPage, documents, getGroupForDocument]);
 
   // Sync pdfStore with active tab state
   useEffect(() => {
@@ -321,10 +341,73 @@ function App() {
     setCurrentView("library");
   }, [setActiveMindMapId, setCurrentView]);
 
+  // Resize handle state for mind map panel
+  const [isResizing, setIsResizing] = useState(false);
+  const resizeStartX = useRef(0);
+  const resizeStartWidth = useRef(0);
+
+  // Handle resize start
+  const handleResizeStart = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsResizing(true);
+    resizeStartX.current = e.clientX;
+    resizeStartWidth.current = mindMapPanelWidth;
+  }, [mindMapPanelWidth]);
+
+  // Handle resize move/end
+  useEffect(() => {
+    if (!isResizing) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      const delta = resizeStartX.current - e.clientX;
+      const newWidth = resizeStartWidth.current + delta;
+      setMindMapPanelWidth(newWidth);
+    };
+
+    const handleMouseUp = () => {
+      setIsResizing(false);
+    };
+
+    document.addEventListener("mousemove", handleMouseMove);
+    document.addEventListener("mouseup", handleMouseUp);
+
+    // Add cursor style to body during resize
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+
+    return () => {
+      document.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("mouseup", handleMouseUp);
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    };
+  }, [isResizing, setMindMapPanelWidth]);
+
   // Get studyGroupId for standalone mindmap view
   const activeMindMapStudyGroupId = activeMindMapId
     ? getMindMap(activeMindMapId)?.studyGroupId || ""
     : "";
+
+  // Handle drag start for selected annotations
+  const handleAnnotationDragStart = useCallback((e: React.DragEvent) => {
+    if (selectedAnnotationIds.size === 0) return;
+
+    // Get document info from active tab
+    const activeTab = getActiveTab();
+    const documentId = activeTab?.documentId || null;
+
+    const dragData = {
+      annotationIds: Array.from(selectedAnnotationIds),
+      documentId,
+      filePath: filePath,
+    };
+
+    e.dataTransfer.setData("application/json", JSON.stringify(dragData));
+    e.dataTransfer.effectAllowed = "copy";
+  }, [selectedAnnotationIds, getActiveTab, filePath]);
+
+  // Check if we should show the drag handle
+  const hasSelectedAnnotations = selectedAnnotationIds.size > 0;
 
   return (
     <div className="flex flex-col h-screen bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100">
@@ -337,24 +420,55 @@ function App() {
         {currentView === "library" ? (
           <Library onOpenDocument={handleOpenDocument} onOpenMindMap={handleOpenMindMap} />
         ) : currentView === "mindmap" && activeMindMapId ? (
-          <MindMapCanvas mindMapId={activeMindMapId} studyGroupId={activeMindMapStudyGroupId} onClose={handleCloseMindMap} />
+          <MindMapCanvas mindMapId={activeMindMapId} studyGroupId={activeMindMapStudyGroupId} onClose={handleCloseMindMap} onOpenDocument={handleOpenDocumentAtPage} />
         ) : (
           <>
             <Sidebar pdfDocument={pdfDocument} />
-            <main className="flex-1 flex overflow-hidden">
+            <main className="flex-1 flex overflow-hidden relative">
               <PdfViewer pdfDocument={pdfDocument} />
+              {/* Drag handle for selected annotations */}
+              {hasSelectedAnnotations && mindMapPanelVisible && (
+                <div
+                  draggable
+                  onDragStart={handleAnnotationDragStart}
+                  onDragEnd={() => clearSelection()}
+                  className="absolute bottom-4 right-4 z-50 flex items-center gap-2 px-3 py-2 bg-purple-600 text-white rounded-lg shadow-lg cursor-grab active:cursor-grabbing hover:bg-purple-700 transition-colors"
+                >
+                  <GripVertical className="w-4 h-4" />
+                  <span className="text-sm font-medium">
+                    {selectedAnnotationIds.size} 선택됨
+                  </span>
+                  <Network className="w-4 h-4" />
+                  <span className="text-xs">→ 마인드맵으로 드래그</span>
+                </div>
+              )}
             </main>
             {/* Mind Map Split Panel */}
             {mindMapPanelVisible && (
-              <div
-                className="border-l border-gray-200 dark:border-gray-700 flex-shrink-0 flex flex-col"
-                style={{ width: mindMapPanelWidth }}
-              >
+              <>
+                {/* Resize Handle */}
+                <div
+                  className={`w-1.5 flex-shrink-0 cursor-col-resize group relative ${
+                    isResizing ? "bg-blue-500" : "hover:bg-blue-400"
+                  }`}
+                  onMouseDown={handleResizeStart}
+                >
+                  <div className="absolute inset-y-0 -left-1 -right-1" />
+                  <div className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-1 h-8 rounded-full transition-colors ${
+                    isResizing ? "bg-blue-300" : "bg-gray-300 dark:bg-gray-600 group-hover:bg-blue-300"
+                  }`} />
+                </div>
+                {/* Mind Map Panel */}
+                <div
+                  className="border-l border-gray-200 dark:border-gray-700 flex-shrink-0 flex flex-col"
+                  style={{ width: mindMapPanelWidth }}
+                >
                 {splitPanelMindMapId && activeTabGroupId ? (
                   <MindMapCanvas
                     mindMapId={splitPanelMindMapId}
                     studyGroupId={activeTabGroupId}
                     onClose={handleToggleMindMapPanel}
+                    onOpenDocument={handleOpenDocumentAtPage}
                   />
                 ) : (
                   <div className="flex-1 flex flex-col items-center justify-center p-4 bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400">
@@ -376,6 +490,7 @@ function App() {
                   </div>
                 )}
               </div>
+              </>
             )}
           </>
         )}

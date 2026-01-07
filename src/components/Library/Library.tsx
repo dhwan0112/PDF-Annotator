@@ -1,16 +1,14 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo } from "react";
 import {
   Search,
   Grid,
   List,
   FileText,
   RefreshCw,
-  FolderKanban,
 } from "lucide-react";
 import { useLibraryStore } from "../../stores";
 import { DocumentCard } from "./DocumentCard";
 import { ProjectSidebar } from "./ProjectSidebar";
-import { StudyGroupSidebar } from "../StudyGroup";
 
 interface LibraryProps {
   onOpenDocument: (filePath: string) => void;
@@ -18,7 +16,6 @@ interface LibraryProps {
 }
 
 export function Library({ onOpenDocument, onOpenMindMap }: LibraryProps) {
-  const [showStudyGroups, setShowStudyGroups] = useState(false);
   const {
     documents,
     projects,
@@ -160,26 +157,21 @@ export function Library({ onOpenDocument, onOpenMindMap }: LibraryProps) {
   return (
     <div className="flex-1 flex bg-gray-100 dark:bg-gray-900">
       {/* Sidebar */}
-      {showStudyGroups ? (
-        <StudyGroupSidebar
-          onOpenDocument={onOpenDocument}
-          onOpenMindMap={onOpenMindMap}
-        />
-      ) : (
-        <ProjectSidebar
-          projects={projects}
-          tags={tags}
-          selectedProjectId={selectedProjectId}
-          selectedTagIds={selectedTagIds}
-          onSelectProject={setSelectedProject}
-          onSelectTags={setSelectedTags}
-          onAddProject={addProject}
-          onEditProject={updateProject}
-          onDeleteProject={deleteProject}
-          onAddTag={addTag}
-          onDeleteTag={deleteTag}
-        />
-      )}
+      <ProjectSidebar
+        projects={projects}
+        tags={tags}
+        selectedProjectId={selectedProjectId}
+        selectedTagIds={selectedTagIds}
+        onSelectProject={setSelectedProject}
+        onSelectTags={setSelectedTags}
+        onAddProject={addProject}
+        onEditProject={updateProject}
+        onDeleteProject={deleteProject}
+        onAddTag={addTag}
+        onDeleteTag={deleteTag}
+        onOpenDocument={onOpenDocument}
+        onOpenMindMap={onOpenMindMap}
+      />
 
       {/* Main Content */}
       <div className="flex-1 flex flex-col overflow-hidden">
@@ -197,20 +189,6 @@ export function Library({ onOpenDocument, onOpenMindMap }: LibraryProps) {
                 className="w-full pl-10 pr-4 py-2 bg-gray-100 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
-
-            {/* Study Groups Toggle */}
-            <button
-              onClick={() => setShowStudyGroups(!showStudyGroups)}
-              className={`p-2 rounded-lg flex items-center gap-2 ${
-                showStudyGroups
-                  ? "bg-purple-100 dark:bg-purple-900/30 text-purple-600"
-                  : "hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-400"
-              }`}
-              title="Study Groups"
-            >
-              <FolderKanban className="w-4 h-4" />
-              <span className="text-sm hidden sm:inline">Study Groups</span>
-            </button>
 
             {/* View Toggle */}
             <div className="flex items-center gap-1 bg-gray-100 dark:bg-gray-700 rounded-lg p-1">
