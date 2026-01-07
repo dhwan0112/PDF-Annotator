@@ -53,6 +53,9 @@ const DEFAULT_SHORTCUTS: Record<string, ShortcutConfig> = {
   // Features
   "feature.toggleMargin": { id: "feature.toggleMargin", label: "Toggle Margin Drawing", category: "Features", binding: { key: "m", ctrl: true } },
   "feature.toggleMindMap": { id: "feature.toggleMindMap", label: "Toggle Mind Map Panel", category: "Features", binding: { key: "m", ctrl: true, shift: true } },
+  "feature.pdfOnlyView": { id: "feature.pdfOnlyView", label: "PDF Only View", category: "Features", binding: { key: "1", ctrl: true } },
+  "feature.mindMapOnlyView": { id: "feature.mindMapOnlyView", label: "Mind Map Only View", category: "Features", binding: { key: "2", ctrl: true } },
+  "feature.splitView": { id: "feature.splitView", label: "Split View (PDF + Mind Map)", category: "Features", binding: { key: "3", ctrl: true } },
 };
 
 interface SettingsState {
