@@ -1,8 +1,10 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { X, FileText, ChevronDown, ChevronRight, FolderPlus } from "lucide-react";
 import { useTabStore, useStudyGroupStore, GROUP_COLORS } from "../../stores";
+import { useDrag } from "../../contexts";
 import type { TabState } from "../../stores";
 import type { StudyGroup } from "../../types";
+import type { DragData, TabDragData } from "../../contexts";
 
 interface TabBarProps {
   onTabChange?: (tab: TabState) => void;
@@ -29,15 +31,22 @@ export function TabBar({ onTabChange }: TabBarProps) {
     removeDocumentFromGroup,
   } = useStudyGroupStore();
 
+  // Custom drag system
+  const { dragState, startDrag, registerDropZone, unregisterDropZone } = useDrag();
+
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; tabId: string } | null>(null);
   const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState("");
   const editInputRef = useRef<HTMLInputElement>(null);
 
-  // Drag and drop state
-  const [draggingTabId, setDraggingTabId] = useState<string | null>(null);
-  const [dropTarget, setDropTarget] = useState<string | null>(null); // groupId or "ungrouped"
+  // Local drag state for visual feedback
+  const [dropTarget, setDropTarget] = useState<string | null>(null);
   const [dropTargetTab, setDropTargetTab] = useState<{ tabId: string; position: "before" | "after" } | null>(null);
+
+  // Get dragging tab ID from drag context
+  const draggingTabId = dragState.isDragging && dragState.dragData?.type === "tab"
+    ? (dragState.dragData as TabDragData).tabId
+    : null;
 
   // Close context menu when clicking outside
   useEffect(() => {
@@ -48,18 +57,13 @@ export function TabBar({ onTabChange }: TabBarProps) {
     }
   }, [contextMenu]);
 
-  // Cleanup global handlers on unmount
+  // Clear visual state when drag ends
   useEffect(() => {
-    return () => {
-      // Ensure cleanup on unmount
-      document.body.classList.remove("tab-dragging");
-      if (globalDragHandlerRef.current) {
-        document.removeEventListener("dragover", globalDragHandlerRef.current);
-        document.removeEventListener("dragenter", globalDragHandlerRef.current);
-        globalDragHandlerRef.current = null;
-      }
-    };
-  }, []);
+    if (!dragState.isDragging) {
+      setDropTarget(null);
+      setDropTargetTab(null);
+    }
+  }, [dragState.isDragging]);
 
   // Focus input when editing group name
   useEffect(() => {
@@ -81,13 +85,6 @@ export function TabBar({ onTabChange }: TabBarProps) {
   const handleCloseTab = (e: React.MouseEvent, tabId: string) => {
     e.stopPropagation();
     closeTab(tabId);
-  };
-
-  const handleMiddleClick = (e: React.MouseEvent, tabId: string) => {
-    if (e.button === 1) {
-      e.preventDefault();
-      closeTab(tabId);
-    }
   };
 
   const handleContextMenu = (e: React.MouseEvent, tabId: string) => {
@@ -157,167 +154,95 @@ export function TabBar({ onTabChange }: TabBarProps) {
     updateStudyGroup(groupId, { color });
   };
 
-  // Global dragover handler reference for cleanup
-  const globalDragHandlerRef = useRef<((e: DragEvent) => void) | null>(null);
+  // Mouse-based drag handlers (replaces HTML5 drag-and-drop)
+  const handleTabMouseDown = (e: React.MouseEvent, tabId: string) => {
+    // Only left mouse button
+    if (e.button !== 0) return;
+    // Don't start drag on close button
+    if ((e.target as HTMLElement).closest("button")) return;
 
-  // Drag and drop handlers
-  const handleDragStart = (e: React.DragEvent, tabId: string) => {
-    console.log("[TabBar] Drag start, tabId:", tabId);
-    e.stopPropagation();
-    setDraggingTabId(tabId);
-    e.dataTransfer.effectAllowed = "move";
-    e.dataTransfer.setData("text/plain", tabId);
-    // Set drag image
-    if (e.currentTarget instanceof HTMLElement) {
-      e.dataTransfer.setDragImage(e.currentTarget, 10, 10);
-    }
+    e.preventDefault();
+    startDrag({ type: "tab", tabId }, e.clientX, e.clientY);
+  };
 
-    // CRITICAL: Add global handler IMMEDIATELY (synchronously) to prevent forbidden cursor
-    // The useEffect approach has a delay which causes the forbidden cursor to appear
-    document.body.classList.add("tab-dragging");
+  // Handle tab drop
+  const handleTabDrop = useCallback((data: DragData) => {
+    if (!data || data.type !== "tab") return;
 
-    const globalHandler = (ev: DragEvent) => {
-      ev.preventDefault();
-      if (ev.dataTransfer) {
-        ev.dataTransfer.dropEffect = "move";
+    const tabId = data.tabId;
+    const pos = dragState.position;
+
+    // Find which element we're over
+    const elements = document.elementsFromPoint(pos.x, pos.y);
+
+    // Check for tab drop
+    const tabElement = elements.find(el => el.getAttribute("data-tab-id"));
+    if (tabElement) {
+      const targetTabId = tabElement.getAttribute("data-tab-id");
+      if (targetTabId && tabId !== targetTabId) {
+        const draggedTab = tabs.find((t) => t.id === tabId);
+        const targetTab = tabs.find((t) => t.id === targetTabId);
+        if (draggedTab && targetTab) {
+          if (draggedTab.groupId === targetTab.groupId) {
+            const rect = tabElement.getBoundingClientRect();
+            const midpoint = rect.left + rect.width / 2;
+            const dropPosition = pos.x < midpoint ? "before" : "after";
+            reorderTab(tabId, targetTabId, dropPosition);
+          } else {
+            if (draggedTab.documentId && draggedTab.groupId) {
+              removeDocumentFromGroup(draggedTab.groupId, draggedTab.documentId);
+            }
+            if (targetTab.groupId && draggedTab.documentId) {
+              addDocumentToGroup(targetTab.groupId, draggedTab.documentId);
+            }
+            moveTabToGroup(tabId, targetTab.groupId);
+          }
+        }
       }
-    };
-    globalDragHandlerRef.current = globalHandler;
-    document.addEventListener("dragover", globalHandler);
-    document.addEventListener("dragenter", globalHandler);
-  };
-
-  const handleDragEnd = () => {
-    setDraggingTabId(null);
-    setDropTarget(null);
-    setDropTargetTab(null);
-
-    // Clean up global handlers
-    document.body.classList.remove("tab-dragging");
-    if (globalDragHandlerRef.current) {
-      document.removeEventListener("dragover", globalDragHandlerRef.current);
-      document.removeEventListener("dragenter", globalDragHandlerRef.current);
-      globalDragHandlerRef.current = null;
-    }
-  };
-
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    e.dataTransfer.dropEffect = "move";
-  };
-
-  const handleTabDragOver = (e: React.DragEvent, tabId: string) => {
-    e.preventDefault();
-    e.stopPropagation();
-    e.dataTransfer.dropEffect = "move";
-
-    if (!draggingTabId || draggingTabId === tabId) return;
-
-    // Determine if dropping before or after based on mouse position
-    const rect = e.currentTarget.getBoundingClientRect();
-    const midpoint = rect.left + rect.width / 2;
-    const position = e.clientX < midpoint ? "before" : "after";
-    setDropTargetTab({ tabId, position });
-  };
-
-  const handleTabDragLeave = () => {
-    setDropTargetTab(null);
-  };
-
-  const handleDropOnTab = (e: React.DragEvent, targetTabId: string) => {
-    console.log("[TabBar] Drop on tab, targetTabId:", targetTabId);
-    e.preventDefault();
-    e.stopPropagation();
-
-    const tabId = draggingTabId || e.dataTransfer.getData("text/plain");
-    console.log("[TabBar] Drop tabId:", tabId);
-    if (!tabId || tabId === targetTabId) {
-      handleDragEnd();
       return;
     }
 
-    const draggedTab = tabs.find((t) => t.id === tabId);
-    const targetTab = tabs.find((t) => t.id === targetTabId);
-    if (!draggedTab || !targetTab) {
-      handleDragEnd();
-      return;
-    }
-
-    // If in same group (or both ungrouped), reorder
-    if (draggedTab.groupId === targetTab.groupId) {
-      const rect = e.currentTarget.getBoundingClientRect();
-      const midpoint = rect.left + rect.width / 2;
-      const position = e.clientX < midpoint ? "before" : "after";
-      reorderTab(tabId, targetTabId, position);
-    } else {
-      // Move to target tab's group
-      if (draggedTab.documentId && draggedTab.groupId) {
-        removeDocumentFromGroup(draggedTab.groupId, draggedTab.documentId);
+    // Check for group drop
+    const groupElement = elements.find(el => el.getAttribute("data-group-id"));
+    if (groupElement) {
+      const groupId = groupElement.getAttribute("data-group-id");
+      if (groupId) {
+        const tab = tabs.find((t) => t.id === tabId);
+        if (tab && tab.groupId !== groupId) {
+          if (tab.documentId && tab.groupId) {
+            removeDocumentFromGroup(tab.groupId, tab.documentId);
+          }
+          if (tab.documentId) {
+            addDocumentToGroup(groupId, tab.documentId);
+          }
+          moveTabToGroup(tabId, groupId);
+        }
       }
-      if (targetTab.groupId && draggedTab.documentId) {
-        addDocumentToGroup(targetTab.groupId, draggedTab.documentId);
+      return;
+    }
+
+    // Check for ungrouped zone
+    const ungroupedZone = elements.find(el => el.getAttribute("data-zone") === "ungrouped");
+    if (ungroupedZone) {
+      const tab = tabs.find((t) => t.id === tabId);
+      if (tab && tab.groupId) {
+        if (tab.documentId && tab.groupId) {
+          removeDocumentFromGroup(tab.groupId, tab.documentId);
+        }
+        moveTabToGroup(tabId, null);
       }
-      moveTabToGroup(tabId, targetTab.groupId);
     }
+  }, [tabs, dragState.position, reorderTab, moveTabToGroup, addDocumentToGroup, removeDocumentFromGroup]);
 
-    handleDragEnd();
-  };
-
-  const handleDropOnGroup = (e: React.DragEvent, groupId: string) => {
-    e.preventDefault();
-    e.stopPropagation();
-
-    const tabId = draggingTabId || e.dataTransfer.getData("text/plain");
-    if (!tabId) {
-      handleDragEnd();
-      return;
+  // Register drop zone for tab bar
+  const tabBarRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = tabBarRef.current;
+    if (el) {
+      registerDropZone("tabbar", el, handleTabDrop);
+      return () => unregisterDropZone("tabbar");
     }
-
-    const tab = tabs.find((t) => t.id === tabId);
-    if (!tab || tab.groupId === groupId) {
-      handleDragEnd();
-      return;
-    }
-
-    // Remove from old group if needed
-    if (tab.documentId && tab.groupId) {
-      removeDocumentFromGroup(tab.groupId, tab.documentId);
-    }
-
-    // Add to new group
-    if (tab.documentId) {
-      addDocumentToGroup(groupId, tab.documentId);
-    }
-
-    moveTabToGroup(tabId, groupId);
-    handleDragEnd();
-  };
-
-  const handleDropOnUngrouped = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-
-    const tabId = draggingTabId || e.dataTransfer.getData("text/plain");
-    if (!tabId) {
-      handleDragEnd();
-      return;
-    }
-
-    const tab = tabs.find((t) => t.id === tabId);
-    if (!tab || !tab.groupId) {
-      handleDragEnd();
-      return;
-    }
-
-    // Remove from group
-    if (tab.documentId && tab.groupId) {
-      removeDocumentFromGroup(tab.groupId, tab.documentId);
-    }
-
-    moveTabToGroup(tabId, null);
-    handleDragEnd();
-  };
+  }, [registerDropZone, unregisterDropZone, handleTabDrop]);
 
   // Organize tabs by group
   const ungroupedTabs = tabs.filter((t) => !t.groupId);
@@ -343,14 +268,16 @@ export function TabBar({ onTabChange }: TabBarProps) {
     return (
       <div
         key={tab.id}
-        draggable="true"
-        onDragStart={(e) => handleDragStart(e, tab.id)}
-        onDragEnd={handleDragEnd}
-        onDragOver={(e) => handleTabDragOver(e, tab.id)}
-        onDragLeave={handleTabDragLeave}
-        onDrop={(e) => handleDropOnTab(e, tab.id)}
+        data-tab-id={tab.id}
+        onMouseDown={(e) => {
+          if (e.button === 1) {
+            e.preventDefault();
+            closeTab(tab.id);
+          } else {
+            handleTabMouseDown(e, tab.id);
+          }
+        }}
         onClick={() => !isDragging && handleTabClick(tab)}
-        onMouseDown={(e) => handleMiddleClick(e, tab.id)}
         onContextMenu={(e) => handleContextMenu(e, tab.id)}
         className={`group flex items-center gap-1.5 px-2.5 py-1.5 cursor-grab active:cursor-grabbing min-w-0 max-w-[180px] transition-all select-none relative ${
           isActive
@@ -380,8 +307,7 @@ export function TabBar({ onTabChange }: TabBarProps) {
         </span>
         <button
           onClick={(e) => handleCloseTab(e, tab.id)}
-          draggable="false"
-          onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
+          onMouseDown={(e) => e.stopPropagation()}
           className={`p-0.5 rounded hover:bg-gray-400 dark:hover:bg-gray-600 ${
             isActive ? "opacity-100" : "opacity-0 group-hover:opacity-100"
           }`}
@@ -409,19 +335,8 @@ export function TabBar({ onTabChange }: TabBarProps) {
     return (
       <div
         key={`group-${group.id}`}
+        data-group-id={group.id}
         className={`flex items-center transition-all ${isDropTarget && !isDraggingFromThisGroup ? 'scale-105' : ''}`}
-        onDragOver={handleDragOver}
-        onDragEnter={(e) => {
-          e.preventDefault();
-          setDropTarget(group.id);
-        }}
-        onDragLeave={(e) => {
-          // Only clear if leaving the group entirely
-          if (!e.currentTarget.contains(e.relatedTarget as Node)) {
-            setDropTarget(null);
-          }
-        }}
-        onDrop={(e) => handleDropOnGroup(e, group.id)}
       >
         {/* Group header */}
         <div
@@ -430,7 +345,6 @@ export function TabBar({ onTabChange }: TabBarProps) {
           }`}
           style={{ ...bgStyle, ...borderStyle }}
           onClick={() => toggleGroupCollapsed(group.id)}
-          onDragOver={handleDragOver}
         >
           {group.collapsed ? (
             <ChevronRight className="w-3 h-3 pointer-events-none" style={textStyle} />
@@ -509,55 +423,29 @@ export function TabBar({ onTabChange }: TabBarProps) {
 
   return (
     <div
+      ref={tabBarRef}
       className="flex items-center bg-gray-200 dark:bg-gray-900 border-b border-gray-300 dark:border-gray-700 overflow-x-auto"
-      onDragOver={(e) => {
-        e.preventDefault();
-        e.dataTransfer.dropEffect = "move";
-      }}
-      onDrop={(e) => {
-        // Fallback handler for drops that don't land on specific zones
-        e.preventDefault();
-        handleDragEnd();
-      }}
     >
       {/* Grouped tabs */}
       {studyGroups.map((group) => renderGroupHeader(group))}
 
       {/* Ungrouped tabs - also a drop zone */}
       <div
+        data-zone="ungrouped"
         className={`flex items-center flex-1 min-h-[36px] transition-all rounded-lg mx-1 ${
           dropTarget === "ungrouped" && draggingTabId && tabs.find(t => t.id === draggingTabId)?.groupId
             ? "bg-blue-100 dark:bg-blue-900/40 ring-2 ring-blue-400 ring-inset"
             : ""
         }`}
-        onDragOver={handleDragOver}
-        onDragEnter={(e) => {
-          e.preventDefault();
-          setDropTarget("ungrouped");
-        }}
-        onDragLeave={(e) => {
-          if (!e.currentTarget.contains(e.relatedTarget as Node)) {
-            setDropTarget(null);
-          }
-        }}
-        onDrop={handleDropOnUngrouped}
       >
         {ungroupedTabs.map((tab) => renderTab(tab))}
         {/* Explicit drop zone for ungrouping - always visible when dragging grouped tab */}
         {draggingTabId && tabs.find(t => t.id === draggingTabId)?.groupId && (
           <div
+            data-zone="ungrouped"
             className="flex items-center px-3 py-1 mx-1 text-xs text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 border-2 border-dashed border-blue-400 rounded-lg cursor-pointer hover:bg-blue-100 dark:hover:bg-blue-900/50"
-            onDragOver={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-            }}
-            onDrop={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              handleDropOnUngrouped(e);
-            }}
           >
-            Drop here to ungroup
+            여기에 드롭하여 그룹 해제
           </div>
         )}
       </div>
