@@ -49,7 +49,9 @@ interface MindMapState {
     content: string,
     color: string,
     x: number,
-    y: number
+    y: number,
+    filePath?: string,
+    pageNumber?: number
   ) => string;
 }
 
@@ -328,11 +330,13 @@ export const useMindMapStore = create<MindMapState>()(
         });
       },
 
-      importAnnotationAsNode: (mindMapId, annotationId, documentId, title, content, color, x, y) => {
+      importAnnotationAsNode: (mindMapId, annotationId, documentId, title, content, color, x, y, filePath, pageNumber) => {
         return get().addNode(mindMapId, {
           sourceType: "annotation",
           sourceId: annotationId,
           documentId,
+          filePath,
+          pageNumber,
           x,
           y,
           title,

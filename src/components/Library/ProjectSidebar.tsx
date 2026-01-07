@@ -8,8 +8,17 @@ import {
   Tag as TagIcon,
   ChevronDown,
   ChevronRight,
+  FolderPlus,
+  Folder,
+  FileText,
+  Network,
+  X,
+  Check,
+  Edit2,
 } from "lucide-react";
 import type { Project, Tag } from "../../stores";
+import { useStudyGroupStore, useLibraryStore, useMindMapStore } from "../../stores";
+import type { StudyGroup } from "../../types";
 
 interface ProjectSidebarProps {
   projects: Project[];
@@ -23,12 +32,19 @@ interface ProjectSidebarProps {
   onDeleteProject: (id: string) => void;
   onAddTag: (name: string, color: string) => void;
   onDeleteTag: (id: string) => void;
+  onOpenDocument?: (docPath: string) => void;
+  onOpenMindMap?: (mindMapId: string) => void;
 }
 
 const PROJECT_COLORS = [
   "#ef4444", "#f97316", "#f59e0b", "#84cc16",
   "#22c55e", "#14b8a6", "#06b6d4", "#3b82f6",
   "#6366f1", "#8b5cf6", "#a855f7", "#ec4899",
+];
+
+const GROUP_COLORS = [
+  "#ef4444", "#f97316", "#f59e0b", "#84cc16", "#22c55e",
+  "#14b8a6", "#06b6d4", "#3b82f6", "#6366f1", "#8b5cf6",
 ];
 
 export function ProjectSidebar({
@@ -43,6 +59,8 @@ export function ProjectSidebar({
   onDeleteProject,
   onAddTag,
   onDeleteTag,
+  onOpenDocument,
+  onOpenMindMap,
 }: ProjectSidebarProps) {
   const [showAddProject, setShowAddProject] = useState(false);
   const [showAddTag, setShowAddTag] = useState(false);
@@ -54,6 +72,30 @@ export function ProjectSidebar({
   const [projectsExpanded, setProjectsExpanded] = useState(true);
   const [tagsExpanded, setTagsExpanded] = useState(true);
   const [menuProjectId, setMenuProjectId] = useState<string | null>(null);
+
+  // Study Groups state
+  const [studyGroupsExpanded, setStudyGroupsExpanded] = useState(true);
+  const [isCreatingGroup, setIsCreatingGroup] = useState(false);
+  const [newGroupName, setNewGroupName] = useState("");
+  const [newGroupColor, setNewGroupColor] = useState(GROUP_COLORS[0]);
+  const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
+  const [editGroupName, setEditGroupName] = useState("");
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+  const [showDocPicker, setShowDocPicker] = useState<string | null>(null);
+
+  // Study Groups store
+  const {
+    studyGroups,
+    activeStudyGroupId,
+    createStudyGroup,
+    updateStudyGroup,
+    deleteStudyGroup,
+    setActiveStudyGroup,
+    addDocumentToGroup,
+    removeDocumentFromGroup,
+  } = useStudyGroupStore();
+  const libraryDocuments = useLibraryStore((s) => s.documents);
+  const { getMindMapsForGroup, createMindMap } = useMindMapStore();
 
   const handleAddProject = () => {
     if (newProjectName.trim()) {
@@ -85,6 +127,56 @@ export function ProjectSidebar({
     } else {
       onSelectTags([...selectedTagIds, tagId]);
     }
+  };
+
+  // Study Groups handlers
+  const handleCreateGroup = () => {
+    if (!newGroupName.trim()) return;
+    const id = createStudyGroup(newGroupName, undefined, newGroupColor);
+    setNewGroupName("");
+    setIsCreatingGroup(false);
+    setActiveStudyGroup(id);
+    setExpandedGroups(new Set([...expandedGroups, id]));
+  };
+
+  const handleStartEditGroup = (group: StudyGroup) => {
+    setEditingGroupId(group.id);
+    setEditGroupName(group.name);
+  };
+
+  const handleSaveEditGroup = () => {
+    if (editingGroupId && editGroupName.trim()) {
+      updateStudyGroup(editingGroupId, { name: editGroupName });
+      setEditingGroupId(null);
+      setEditGroupName("");
+    }
+  };
+
+  const toggleGroupExpand = (groupId: string) => {
+    const newExpanded = new Set(expandedGroups);
+    if (newExpanded.has(groupId)) {
+      newExpanded.delete(groupId);
+    } else {
+      newExpanded.add(groupId);
+    }
+    setExpandedGroups(newExpanded);
+  };
+
+  const handleAddDocumentToGroup = (groupId: string, docId: string) => {
+    addDocumentToGroup(groupId, docId);
+    setShowDocPicker(null);
+  };
+
+  const handleCreateMindMap = (groupId: string) => {
+    const group = studyGroups.find((g) => g.id === groupId);
+    const id = createMindMap(groupId, `${group?.name || "Study"} Mind Map`);
+    if (onOpenMindMap) {
+      onOpenMindMap(id);
+    }
+  };
+
+  const getDocumentById = (docId: string) => {
+    return libraryDocuments.find((d) => d.id === docId);
   };
 
   return (
@@ -319,6 +411,275 @@ export function ProjectSidebar({
                       Cancel
                     </button>
                   </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Study Groups Section */}
+        <div className="p-2 border-t border-gray-200 dark:border-gray-700">
+          <button
+            onClick={() => setStudyGroupsExpanded(!studyGroupsExpanded)}
+            className="w-full px-2 py-1 flex items-center justify-between text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider"
+          >
+            <span className="flex items-center gap-1">
+              {studyGroupsExpanded ? (
+                <ChevronDown className="w-3 h-3" />
+              ) : (
+                <ChevronRight className="w-3 h-3" />
+              )}
+              Study Groups
+            </span>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setIsCreatingGroup(true);
+              }}
+              className="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded"
+            >
+              <FolderPlus className="w-3 h-3" />
+            </button>
+          </button>
+
+          {studyGroupsExpanded && (
+            <div className="mt-1 space-y-0.5">
+              {/* Create new group form */}
+              {isCreatingGroup && (
+                <div className="p-2 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 mb-2">
+                  <input
+                    type="text"
+                    value={newGroupName}
+                    onChange={(e) => setNewGroupName(e.target.value)}
+                    placeholder="Group name"
+                    className="w-full px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700"
+                    autoFocus
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") handleCreateGroup();
+                      if (e.key === "Escape") setIsCreatingGroup(false);
+                    }}
+                  />
+                  <div className="flex gap-1 mt-2 flex-wrap">
+                    {GROUP_COLORS.map((color) => (
+                      <button
+                        key={color}
+                        onClick={() => setNewGroupColor(color)}
+                        className={`w-5 h-5 rounded-full ${
+                          newGroupColor === color
+                            ? "ring-2 ring-offset-2 ring-blue-500"
+                            : ""
+                        }`}
+                        style={{ backgroundColor: color }}
+                      />
+                    ))}
+                  </div>
+                  <div className="flex gap-2 mt-2">
+                    <button
+                      onClick={handleCreateGroup}
+                      className="px-2 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600"
+                    >
+                      Create
+                    </button>
+                    <button
+                      onClick={() => setIsCreatingGroup(false)}
+                      className="px-2 py-1 text-xs bg-gray-200 dark:bg-gray-700 rounded hover:bg-gray-300 dark:hover:bg-gray-600"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Groups list */}
+              {studyGroups.map((group) => {
+                const isExpanded = expandedGroups.has(group.id);
+                const isActive = activeStudyGroupId === group.id;
+                const mindMaps = getMindMapsForGroup(group.id);
+                const groupDocs = group.documentIds
+                  .map((id) => getDocumentById(id))
+                  .filter((doc): doc is NonNullable<typeof doc> => doc != null);
+
+                return (
+                  <div key={group.id}>
+                    {/* Group header */}
+                    <div
+                      className={`flex items-center px-2 py-1.5 rounded-lg cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-700 group ${
+                        isActive ? "bg-purple-100 dark:bg-purple-900/30" : ""
+                      }`}
+                      onClick={() => {
+                        setActiveStudyGroup(group.id);
+                        toggleGroupExpand(group.id);
+                      }}
+                    >
+                      <button className="p-0.5 mr-1">
+                        {isExpanded ? (
+                          <ChevronDown className="w-3 h-3 text-gray-500" />
+                        ) : (
+                          <ChevronRight className="w-3 h-3 text-gray-500" />
+                        )}
+                      </button>
+                      {isExpanded ? (
+                        <FolderOpen className="w-3.5 h-3.5 mr-1.5 flex-shrink-0" style={{ color: group.color }} />
+                      ) : (
+                        <Folder className="w-3.5 h-3.5 mr-1.5 flex-shrink-0" style={{ color: group.color }} />
+                      )}
+                      {editingGroupId === group.id ? (
+                        <input
+                          type="text"
+                          value={editGroupName}
+                          onChange={(e) => setEditGroupName(e.target.value)}
+                          className="flex-1 px-1 text-sm bg-white dark:bg-gray-900 border border-blue-500 rounded focus:outline-none"
+                          autoFocus
+                          onClick={(e) => e.stopPropagation()}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") handleSaveEditGroup();
+                            if (e.key === "Escape") setEditingGroupId(null);
+                          }}
+                        />
+                      ) : (
+                        <span className="flex-1 text-sm text-gray-700 dark:text-gray-300 truncate">
+                          {group.name}
+                        </span>
+                      )}
+                      <span className="text-xs text-gray-400 mr-1">
+                        {group.documentIds.length}
+                      </span>
+                      {editingGroupId === group.id ? (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleSaveEditGroup();
+                          }}
+                          className="p-0.5 hover:bg-gray-300 dark:hover:bg-gray-600 rounded"
+                        >
+                          <Check className="w-3 h-3 text-green-600" />
+                        </button>
+                      ) : (
+                        <>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleStartEditGroup(group);
+                            }}
+                            className="p-0.5 hover:bg-gray-300 dark:hover:bg-gray-600 rounded opacity-0 group-hover:opacity-100"
+                          >
+                            <Edit2 className="w-3 h-3 text-gray-500" />
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (confirm("Delete this group?")) {
+                                deleteStudyGroup(group.id);
+                              }
+                            }}
+                            className="p-0.5 hover:bg-red-100 dark:hover:bg-red-900/30 rounded opacity-0 group-hover:opacity-100"
+                          >
+                            <Trash2 className="w-3 h-3 text-red-500" />
+                          </button>
+                        </>
+                      )}
+                    </div>
+
+                    {/* Expanded content */}
+                    {isExpanded && (
+                      <div className="ml-4 pl-2 border-l border-gray-200 dark:border-gray-700">
+                        {/* Documents in group */}
+                        {groupDocs.map((doc) => (
+                          <div
+                            key={doc.id}
+                            className="flex items-center px-2 py-1 hover:bg-gray-100 dark:hover:bg-gray-750 cursor-pointer rounded group/doc"
+                            onClick={() => onOpenDocument?.(doc.file_path)}
+                          >
+                            <FileText className="w-3 h-3 mr-1.5 text-gray-400 flex-shrink-0" />
+                            <span className="flex-1 text-xs text-gray-600 dark:text-gray-400 truncate">
+                              {doc.title || doc.file_name}
+                            </span>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                removeDocumentFromGroup(group.id, doc.id);
+                              }}
+                              className="p-0.5 hover:bg-red-100 dark:hover:bg-red-900/30 rounded opacity-0 group-hover/doc:opacity-100"
+                            >
+                              <X className="w-3 h-3 text-red-500" />
+                            </button>
+                          </div>
+                        ))}
+
+                        {/* Mind maps */}
+                        {mindMaps.map((mm) => (
+                          <div
+                            key={mm.id}
+                            className="flex items-center px-2 py-1 hover:bg-gray-100 dark:hover:bg-gray-750 cursor-pointer rounded"
+                            onClick={() => onOpenMindMap?.(mm.id)}
+                          >
+                            <Network className="w-3 h-3 mr-1.5 text-purple-500 flex-shrink-0" />
+                            <span className="flex-1 text-xs text-gray-600 dark:text-gray-400 truncate">
+                              {mm.name}
+                            </span>
+                          </div>
+                        ))}
+
+                        {/* Actions */}
+                        <div className="flex px-1 py-1.5 gap-1">
+                          <button
+                            onClick={() => setShowDocPicker(group.id)}
+                            className="flex items-center px-1.5 py-0.5 text-xs text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 rounded"
+                          >
+                            <Plus className="w-3 h-3 mr-0.5" />
+                            Doc
+                          </button>
+                          <button
+                            onClick={() => handleCreateMindMap(group.id)}
+                            className="flex items-center px-1.5 py-0.5 text-xs text-purple-600 dark:text-purple-400 hover:bg-purple-100 dark:hover:bg-purple-900/30 rounded"
+                          >
+                            <Network className="w-3 h-3 mr-0.5" />
+                            Map
+                          </button>
+                        </div>
+
+                        {/* Document picker */}
+                        {showDocPicker === group.id && (
+                          <div className="px-1 pb-1">
+                            <div className="p-1.5 border border-gray-200 dark:border-gray-700 rounded bg-white dark:bg-gray-900 max-h-32 overflow-y-auto">
+                              {libraryDocuments
+                                .filter((d) => !group.documentIds.includes(d.id))
+                                .map((doc) => (
+                                  <div
+                                    key={doc.id}
+                                    className="flex items-center px-1.5 py-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded cursor-pointer"
+                                    onClick={() => handleAddDocumentToGroup(group.id, doc.id)}
+                                  >
+                                    <FileText className="w-3 h-3 mr-1.5 text-gray-400" />
+                                    <span className="text-xs text-gray-700 dark:text-gray-300 truncate">
+                                      {doc.title || doc.file_name}
+                                    </span>
+                                  </div>
+                                ))}
+                              {libraryDocuments.filter((d) => !group.documentIds.includes(d.id))
+                                .length === 0 && (
+                                <div className="text-xs text-gray-400 text-center py-1">
+                                  No documents
+                                </div>
+                              )}
+                            </div>
+                            <button
+                              onClick={() => setShowDocPicker(null)}
+                              className="mt-1 text-xs text-gray-500 hover:text-gray-700"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+
+              {studyGroups.length === 0 && !isCreatingGroup && (
+                <div className="px-2 py-2 text-xs text-gray-400 dark:text-gray-500 text-center">
+                  No study groups
                 </div>
               )}
             </div>

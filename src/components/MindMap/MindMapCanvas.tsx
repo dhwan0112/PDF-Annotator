@@ -1,5 +1,5 @@
 import { useRef, useState, useCallback, useEffect } from "react";
-import { useMindMapStore } from "../../stores";
+import { useMindMapStore, useAnnotationStore, useLibraryStore } from "../../stores";
 import type { MindMapNode, Annotation } from "../../types";
 import {
   Plus,
@@ -13,6 +13,7 @@ import {
   X,
   PanelRightOpen,
   PanelRightClose,
+  FileText,
 } from "lucide-react";
 import { AnnotationBrowser } from "./AnnotationBrowser";
 
@@ -20,6 +21,7 @@ interface MindMapCanvasProps {
   mindMapId: string;
   studyGroupId: string;
   onClose: () => void;
+  onOpenDocument?: (filePath: string, pageNumber?: number) => void;
 }
 
 const NODE_COLORS = [
@@ -27,7 +29,7 @@ const NODE_COLORS = [
   "#fed7aa", "#cffafe", "#fecaca", "#d9f99d", "#f5d0fe",
 ];
 
-export function MindMapCanvas({ mindMapId, studyGroupId, onClose }: MindMapCanvasProps) {
+export function MindMapCanvas({ mindMapId, studyGroupId, onClose, onOpenDocument }: MindMapCanvasProps) {
   const canvasRef = useRef<HTMLDivElement>(null);
   const {
     getMindMap,
@@ -54,6 +56,11 @@ export function MindMapCanvas({ mindMapId, studyGroupId, onClose }: MindMapCanva
   const [editTitle, setEditTitle] = useState("");
   const [editContent, setEditContent] = useState("");
   const [showAnnotationBrowser, setShowAnnotationBrowser] = useState(false);
+  const [isDragOver, setIsDragOver] = useState(false);
+
+  // For getting annotation data when dropped
+  const { annotations: allAnnotations } = useAnnotationStore();
+  const { documents } = useLibraryStore();
 
   if (!mindMap) {
     return (
@@ -232,6 +239,114 @@ export function MindMapCanvas({ mindMapId, studyGroupId, onClose }: MindMapCanva
     );
   };
 
+  // Handle drag and drop from PDF viewer
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "copy";
+    setIsDragOver(true);
+  }, []);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(false);
+  }, []);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(false);
+
+    const data = e.dataTransfer.getData("application/json");
+    if (!data) return;
+
+    try {
+      const { annotationIds, documentId, filePath } = JSON.parse(data);
+      if (!annotationIds || !Array.isArray(annotationIds)) return;
+
+      // Get drop position in canvas coordinates
+      const rect = canvasRef.current?.getBoundingClientRect();
+      if (!rect || !mindMap) return;
+
+      const dropX = (e.clientX - rect.left - mindMap.panX) / mindMap.zoom;
+      const dropY = (e.clientY - rect.top - mindMap.panY) / mindMap.zoom;
+
+      // Get document name
+      const doc = documents.find(d => d.id === documentId || d.file_path === filePath);
+      const documentName = doc?.title || doc?.file_name || "Unknown Document";
+
+      // Add each annotation as a node, offset each one
+      annotationIds.forEach((annotationId: string, index: number) => {
+        // Find the annotation in the store
+        let foundAnnotation: Annotation | undefined;
+        for (const [, pageAnnotations] of allAnnotations) {
+          const found = pageAnnotations.find(a => a.id === annotationId);
+          if (found) {
+            foundAnnotation = found;
+            break;
+          }
+        }
+
+        if (foundAnnotation) {
+          // Extract annotation info
+          let title = "";
+          let content = "";
+
+          switch (foundAnnotation.type) {
+            case "highlight":
+            case "underline":
+            case "strikeout":
+              title = (foundAnnotation as { text?: string }).text?.slice(0, 50) || "Text Annotation";
+              content = (foundAnnotation as { text?: string }).text || "";
+              break;
+            case "note":
+              title = (foundAnnotation as { content: string }).content.slice(0, 50);
+              content = (foundAnnotation as { content: string }).content;
+              break;
+            case "textbox":
+              title = (foundAnnotation as { content: string }).content.slice(0, 50);
+              content = (foundAnnotation as { content: string }).content;
+              break;
+            case "ink":
+              title = "Drawing";
+              content = `Drawing annotation from ${documentName}`;
+              break;
+            case "highlighterInk":
+              title = "Highlighter Mark";
+              content = `Highlighter from ${documentName}`;
+              break;
+            case "rect":
+              title = "Rectangle";
+              content = `Rectangle annotation from ${documentName}`;
+              break;
+            case "arrow":
+              title = "Arrow";
+              content = `Arrow annotation from ${documentName}`;
+              break;
+            default:
+              title = "Annotation";
+              content = `From ${documentName}`;
+          }
+
+          content += `\n\nPage ${foundAnnotation.pageNumber}`;
+
+          importAnnotationAsNode(
+            mindMapId,
+            foundAnnotation.id,
+            documentId || "",
+            title,
+            content,
+            foundAnnotation.color || NODE_COLORS[Math.floor(Math.random() * NODE_COLORS.length)],
+            dropX + index * 220,
+            dropY + index * 30,
+            filePath || undefined,
+            foundAnnotation.pageNumber
+          );
+        }
+      });
+    } catch (err) {
+      console.error("Failed to parse dropped data:", err);
+    }
+  }, [mindMap, mindMapId, allAnnotations, documents, importAnnotationAsNode]);
+
   const handleWheel = useCallback(
     (e: WheelEvent) => {
       if (e.ctrlKey || e.metaKey) {
@@ -341,11 +456,16 @@ export function MindMapCanvas({ mindMapId, studyGroupId, onClose }: MindMapCanva
       {/* Canvas */}
       <div
         ref={canvasRef}
-        className="flex-1 relative overflow-hidden cursor-grab active:cursor-grabbing"
+        className={`flex-1 relative overflow-hidden cursor-grab active:cursor-grabbing ${
+          isDragOver ? "ring-4 ring-inset ring-blue-400 bg-blue-50 dark:bg-blue-900/20" : ""
+        }`}
         onMouseDown={handleCanvasMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
         onMouseLeave={handleMouseUp}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
       >
         {/* Connecting line indicator */}
         {connectingFromId && (
@@ -506,8 +626,21 @@ export function MindMapCanvas({ mindMapId, studyGroupId, onClose }: MindMapCanva
                     </div>
                   )}
                   {node.sourceType !== "custom" && (
-                    <div className="px-3 py-1 text-xs text-gray-500 bg-black/5">
-                      From {node.sourceType === "margin_note" ? "note" : "annotation"}
+                    <div className="px-3 py-1 text-xs text-gray-500 bg-black/5 flex items-center justify-between">
+                      <span>From {node.sourceType === "margin_note" ? "note" : "annotation"}</span>
+                      {node.filePath && onOpenDocument && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onOpenDocument(node.filePath!, node.pageNumber);
+                          }}
+                          className="p-1 hover:bg-black/10 rounded flex items-center gap-1 text-blue-600"
+                          title={`Go to page ${node.pageNumber || 1}`}
+                        >
+                          <FileText className="w-3 h-3" />
+                          <span className="text-[10px]">원본보기</span>
+                        </button>
+                      )}
                     </div>
                   )}
                 </>
