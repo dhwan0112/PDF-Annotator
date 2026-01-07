@@ -29,13 +29,14 @@ import {
   Library,
   Settings2,
   Keyboard,
+  Cloud,
 } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
 import { save } from "@tauri-apps/plugin-dialog";
 import { readFile, writeFile } from "@tauri-apps/plugin-fs";
 import type { AnnotationTool } from "../../types";
 import { ToolSettingsPopover } from "./ToolSettingsPopover";
-import { KeyboardShortcutsSettings } from "../Settings";
+import { KeyboardShortcutsSettings, SyncSettings } from "../Settings";
 import { exportAnnotationsToPdf } from "../../utils";
 
 const tools: { id: AnnotationTool; icon: typeof Pen; label: string }[] = [
@@ -75,6 +76,7 @@ export function Toolbar() {
   const [settingsPopoverTool, setSettingsPopoverTool] = useState<AnnotationTool | null>(null);
   const [settingsAnchorEl, setSettingsAnchorEl] = useState<HTMLElement | null>(null);
   const [showKeyboardSettings, setShowKeyboardSettings] = useState(false);
+  const [showSyncSettings, setShowSyncSettings] = useState(false);
   const [showThemeMenu, setShowThemeMenu] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const toolButtonRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
@@ -189,7 +191,7 @@ export function Toolbar() {
         {/* Logo/Title */}
         <div className="flex items-center gap-2 px-2">
           <Library className="w-5 h-5 text-blue-500" />
-          <span className="font-semibold text-gray-800 dark:text-gray-200">PDF Annotator</span>
+          <span className="font-semibold text-gray-800 dark:text-gray-200">Marginalia</span>
         </div>
 
         {/* Open file */}
@@ -202,6 +204,13 @@ export function Toolbar() {
         </div>
 
         <div className="flex-1" />
+
+        {/* Sync settings */}
+        <ToolbarButton
+          icon={Cloud}
+          label="동기화 설정"
+          onClick={() => setShowSyncSettings(true)}
+        />
 
         {/* Keyboard shortcuts settings */}
         <ToolbarButton
@@ -221,6 +230,11 @@ export function Toolbar() {
         {/* Keyboard shortcuts settings modal */}
         {showKeyboardSettings && (
           <KeyboardShortcutsSettings onClose={() => setShowKeyboardSettings(false)} />
+        )}
+
+        {/* Sync settings modal */}
+        {showSyncSettings && (
+          <SyncSettings onClose={() => setShowSyncSettings(false)} />
         )}
       </header>
     );
@@ -409,6 +423,13 @@ export function Toolbar() {
 
       <div className="flex-1" />
 
+      {/* Sync settings */}
+      <ToolbarButton
+        icon={Cloud}
+        label="동기화 설정"
+        onClick={() => setShowSyncSettings(true)}
+      />
+
       {/* Keyboard shortcuts settings */}
       <ToolbarButton
         icon={Keyboard}
@@ -427,6 +448,11 @@ export function Toolbar() {
       {/* Keyboard shortcuts settings modal */}
       {showKeyboardSettings && (
         <KeyboardShortcutsSettings onClose={() => setShowKeyboardSettings(false)} />
+      )}
+
+      {/* Sync settings modal */}
+      {showSyncSettings && (
+        <SyncSettings onClose={() => setShowSyncSettings(false)} />
       )}
     </header>
   );
