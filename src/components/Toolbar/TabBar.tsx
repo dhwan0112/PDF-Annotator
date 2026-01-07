@@ -162,6 +162,7 @@ export function TabBar({ onTabChange }: TabBarProps) {
 
   // Drag and drop handlers
   const handleDragStart = (e: React.DragEvent, tabId: string) => {
+    console.log("[TabBar] Drag start, tabId:", tabId);
     e.stopPropagation();
     setDraggingTabId(tabId);
     e.dataTransfer.effectAllowed = "move";
@@ -225,10 +226,12 @@ export function TabBar({ onTabChange }: TabBarProps) {
   };
 
   const handleDropOnTab = (e: React.DragEvent, targetTabId: string) => {
+    console.log("[TabBar] Drop on tab, targetTabId:", targetTabId);
     e.preventDefault();
     e.stopPropagation();
 
     const tabId = draggingTabId || e.dataTransfer.getData("text/plain");
+    console.log("[TabBar] Drop tabId:", tabId);
     if (!tabId || tabId === targetTabId) {
       handleDragEnd();
       return;
