@@ -183,7 +183,7 @@ export const useStudyGroupStore = create<StudyGroupState>()(
       },
     }),
     {
-      name: "pdf-annotator-study-groups",
+      name: "marginalia-study-groups",
       partialize: (state) => ({
         studyGroups: state.studyGroups,
         marginNotes: Array.from(state.marginNotes.entries()),

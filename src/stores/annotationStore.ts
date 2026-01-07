@@ -477,7 +477,7 @@ export const useAnnotationStore = create<AnnotationState>()(
         }),
     }),
     {
-      name: "pdf-annotator-tools",
+      name: "marginalia-tools",
       partialize: (state) => ({
         toolSettings: state.toolSettings,
         lastDrawingTool: state.lastDrawingTool,
