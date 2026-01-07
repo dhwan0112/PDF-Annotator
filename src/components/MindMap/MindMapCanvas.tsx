@@ -541,8 +541,9 @@ export function MindMapCanvas({ mindMapId, studyGroupId, onClose, onOpenDocument
           })}
         </svg>
 
-        {/* Nodes */}
+        {/* Nodes - pointer-events-none on container so drag events reach canvas */}
         <div
+          className="pointer-events-none"
           style={{
             transform: `translate(${mindMap.panX}px, ${mindMap.panY}px) scale(${mindMap.zoom})`,
             transformOrigin: "0 0",
@@ -551,7 +552,7 @@ export function MindMapCanvas({ mindMapId, studyGroupId, onClose, onOpenDocument
           {mindMap.nodes.map((node) => (
             <div
               key={node.id}
-              className={`absolute rounded-lg shadow-md border-2 overflow-hidden cursor-move select-none group ${
+              className={`absolute rounded-lg shadow-md border-2 overflow-hidden cursor-move select-none group pointer-events-auto ${
                 selectedNodeId === node.id
                   ? "border-blue-500 ring-2 ring-blue-300"
                   : "border-gray-200 dark:border-gray-600"
