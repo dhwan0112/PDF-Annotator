@@ -12,3 +12,5 @@ export { useMindMapStore } from "./mindMapStore";
 export { useTabStore } from "./tabStore";
 export type { TabState } from "./tabStore";
 export { useBibtexStore, generateCiteKey, formatBibTeXEntry, createDefaultEntry } from "./bibtexStore";
+export { useSyncStore } from "./syncStore";
+export type { SyncProvider } from "./syncStore";
