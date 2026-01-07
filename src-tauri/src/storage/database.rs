@@ -43,6 +43,7 @@ pub struct Tag {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[allow(dead_code)]
 pub struct DocumentTag {
     pub document_id: String,
     pub tag_id: String,
