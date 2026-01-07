@@ -75,6 +75,7 @@ export function Toolbar() {
   const [settingsPopoverTool, setSettingsPopoverTool] = useState<AnnotationTool | null>(null);
   const [settingsAnchorEl, setSettingsAnchorEl] = useState<HTMLElement | null>(null);
   const [showKeyboardSettings, setShowKeyboardSettings] = useState(false);
+  const [showThemeMenu, setShowThemeMenu] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const toolButtonRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
 
@@ -177,17 +178,9 @@ export function Toolbar() {
     setCurrentView("library");
   };
 
-  const cycleTheme = () => {
-    const nextTheme =
-      theme === "light" ? "dark" : theme === "dark" ? "system" : "light";
-    setTheme(nextTheme);
-  };
-
   const toggleViewMode = () => {
     setViewMode(viewMode === "continuous" ? "single" : "continuous");
   };
-
-  const ThemeIcon = theme === "light" ? Sun : theme === "dark" ? Moon : Monitor;
 
   // Library view toolbar
   if (currentView === "library") {
@@ -218,10 +211,11 @@ export function Toolbar() {
         />
 
         {/* Theme toggle */}
-        <ToolbarButton
-          icon={ThemeIcon}
-          label={`Theme: ${theme}`}
-          onClick={cycleTheme}
+        <ThemeToggle
+          theme={theme}
+          setTheme={setTheme}
+          showMenu={showThemeMenu}
+          setShowMenu={setShowThemeMenu}
         />
 
         {/* Keyboard shortcuts settings modal */}
@@ -423,10 +417,11 @@ export function Toolbar() {
       />
 
       {/* Theme toggle */}
-      <ToolbarButton
-        icon={ThemeIcon}
-        label={`Theme: ${theme}`}
-        onClick={cycleTheme}
+      <ThemeToggle
+        theme={theme}
+        setTheme={setTheme}
+        showMenu={showThemeMenu}
+        setShowMenu={setShowThemeMenu}
       />
 
       {/* Keyboard shortcuts settings modal */}
@@ -434,6 +429,68 @@ export function Toolbar() {
         <KeyboardShortcutsSettings onClose={() => setShowKeyboardSettings(false)} />
       )}
     </header>
+  );
+}
+
+interface ThemeToggleProps {
+  theme: "light" | "dark" | "system";
+  setTheme: (theme: "light" | "dark" | "system") => void;
+  showMenu: boolean;
+  setShowMenu: (show: boolean) => void;
+}
+
+function ThemeToggle({ theme, setTheme, showMenu, setShowMenu }: ThemeToggleProps) {
+  const ThemeIcon = theme === "light" ? Sun : theme === "dark" ? Moon : Monitor;
+  const themeLabel = theme === "light" ? "라이트" : theme === "dark" ? "다크" : "시스템";
+
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setShowMenu(!showMenu)}
+        className="flex items-center gap-1.5 p-2 rounded transition-colors text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700"
+        title={`테마: ${themeLabel}`}
+      >
+        <ThemeIcon className="w-5 h-5" />
+        <span className="text-xs hidden sm:inline">{themeLabel}</span>
+      </button>
+      {showMenu && (
+        <>
+          <div
+            className="fixed inset-0 z-40"
+            onClick={() => setShowMenu(false)}
+          />
+          <div className="absolute right-0 top-full mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg shadow-lg py-1 z-50 min-w-[120px]">
+            <button
+              onClick={() => { setTheme("light"); setShowMenu(false); }}
+              className={`w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 ${
+                theme === "light" ? "text-blue-500 bg-blue-50 dark:bg-blue-900/30" : "text-gray-700 dark:text-gray-300"
+              }`}
+            >
+              <Sun className="w-4 h-4" />
+              라이트
+            </button>
+            <button
+              onClick={() => { setTheme("dark"); setShowMenu(false); }}
+              className={`w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 ${
+                theme === "dark" ? "text-blue-500 bg-blue-50 dark:bg-blue-900/30" : "text-gray-700 dark:text-gray-300"
+              }`}
+            >
+              <Moon className="w-4 h-4" />
+              다크
+            </button>
+            <button
+              onClick={() => { setTheme("system"); setShowMenu(false); }}
+              className={`w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 ${
+                theme === "system" ? "text-blue-500 bg-blue-50 dark:bg-blue-900/30" : "text-gray-700 dark:text-gray-300"
+              }`}
+            >
+              <Monitor className="w-4 h-4" />
+              시스템
+            </button>
+          </div>
+        </>
+      )}
+    </div>
   );
 }
 
