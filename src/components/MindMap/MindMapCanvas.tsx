@@ -1,6 +1,8 @@
 import { useRef, useState, useCallback, useEffect } from "react";
 import { useMindMapStore, useAnnotationStore, useLibraryStore } from "../../stores";
+import { useDrag } from "../../contexts";
 import type { MindMapNode, Annotation } from "../../types";
+import type { DragData, AnnotationDragData } from "../../contexts";
 import {
   Plus,
   Trash2,
@@ -58,8 +60,11 @@ export function MindMapCanvas({ mindMapId, studyGroupId, onClose, onOpenDocument
   const [showAnnotationBrowser, setShowAnnotationBrowser] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
 
+  // Custom drag system
+  const { dragState, registerDropZone, unregisterDropZone } = useDrag();
+
   // For getting annotation data when dropped
-  const { annotations: allAnnotations } = useAnnotationStore();
+  const { annotations: allAnnotations, clearSelection } = useAnnotationStore();
   const { documents } = useLibraryStore();
 
   if (!mindMap) {
@@ -372,6 +377,117 @@ export function MindMapCanvas({ mindMapId, studyGroupId, onClose, onOpenDocument
       return () => canvas.removeEventListener("wheel", handleWheel);
     }
   }, [handleWheel]);
+
+  // Custom drop handler for annotation drag
+  const handleAnnotationDrop = useCallback((data: DragData) => {
+    if (!data || data.type !== "annotation") return;
+    if (!canvasRef.current || !mindMap) return;
+
+    const annotationData = data as AnnotationDragData;
+    const { annotationIds, documentId, filePath } = annotationData;
+    if (!annotationIds || !Array.isArray(annotationIds)) return;
+
+    const rect = canvasRef.current.getBoundingClientRect();
+    const dropX = (dragState.position.x - rect.left - mindMap.panX) / mindMap.zoom;
+    const dropY = (dragState.position.y - rect.top - mindMap.panY) / mindMap.zoom;
+
+    const doc = documents.find(d => d.id === documentId || d.file_path === filePath);
+    const documentName = doc?.title || doc?.file_name || "Unknown Document";
+
+    annotationIds.forEach((annotationId: string, index: number) => {
+      let foundAnnotation: Annotation | undefined;
+      for (const [, pageAnnotations] of allAnnotations) {
+        const found = pageAnnotations.find(a => a.id === annotationId);
+        if (found) {
+          foundAnnotation = found;
+          break;
+        }
+      }
+
+      if (foundAnnotation) {
+        let title = "";
+        let content = "";
+
+        switch (foundAnnotation.type) {
+          case "highlight":
+          case "underline":
+          case "strikeout":
+            title = (foundAnnotation as { text?: string }).text?.slice(0, 50) || "Text Annotation";
+            content = (foundAnnotation as { text?: string }).text || "";
+            break;
+          case "note":
+            title = (foundAnnotation as { content: string }).content.slice(0, 50);
+            content = (foundAnnotation as { content: string }).content;
+            break;
+          case "textbox":
+            title = (foundAnnotation as { content: string }).content.slice(0, 50);
+            content = (foundAnnotation as { content: string }).content;
+            break;
+          case "ink":
+            title = "Drawing";
+            content = `Drawing annotation from ${documentName}`;
+            break;
+          case "highlighterInk":
+            title = "Highlighter Mark";
+            content = `Highlighter from ${documentName}`;
+            break;
+          case "rect":
+            title = "Rectangle";
+            content = `Rectangle annotation from ${documentName}`;
+            break;
+          case "arrow":
+            title = "Arrow";
+            content = `Arrow annotation from ${documentName}`;
+            break;
+          default:
+            title = "Annotation";
+            content = `From ${documentName}`;
+        }
+
+        content += `\n\nPage ${foundAnnotation.pageNumber}`;
+
+        importAnnotationAsNode(
+          mindMapId,
+          foundAnnotation.id,
+          documentId || "",
+          title,
+          content,
+          foundAnnotation.color || NODE_COLORS[Math.floor(Math.random() * NODE_COLORS.length)],
+          dropX + index * 220,
+          dropY + index * 30,
+          filePath || undefined,
+          foundAnnotation.pageNumber
+        );
+      }
+    });
+
+    // Clear the annotation selection after successful drop
+    clearSelection();
+  }, [mindMap, mindMapId, allAnnotations, documents, importAnnotationAsNode, dragState.position, clearSelection]);
+
+  // Register as drop zone for annotations
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (canvas) {
+      registerDropZone(`mindmap-${mindMapId}`, canvas, handleAnnotationDrop);
+      return () => unregisterDropZone(`mindmap-${mindMapId}`);
+    }
+  }, [mindMapId, registerDropZone, unregisterDropZone, handleAnnotationDrop]);
+
+  // Show visual feedback when annotation is being dragged over
+  useEffect(() => {
+    if (dragState.isDragging && dragState.dragData?.type === "annotation") {
+      const canvas = canvasRef.current;
+      if (canvas) {
+        const rect = canvas.getBoundingClientRect();
+        const { x, y } = dragState.position;
+        const isOver = x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
+        setIsDragOver(isOver);
+      }
+    } else {
+      setIsDragOver(false);
+    }
+  }, [dragState]);
 
   return (
     <div className="flex-1 flex bg-gray-100 dark:bg-gray-900 h-full">

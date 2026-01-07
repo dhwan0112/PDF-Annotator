@@ -6,10 +6,12 @@ import { Library } from "./components/Library";
 import { MindMapCanvas } from "./components/MindMap";
 import { useUiStore, usePdfStore, useAnnotationStore, useLibraryStore, useSettingsStore, useStudyGroupStore, useMindMapStore, useTabStore } from "./stores";
 import { usePdfDocument, useAnnotationPersistence, useBookmarkPersistence, useAutoSave, usePenTablet, useSessionRestore } from "./hooks";
+import { useDrag } from "./contexts";
 import { GripVertical, Network } from "lucide-react";
 
 function App() {
   const { theme, currentView, setCurrentView, activeMindMapId, setActiveMindMapId, mindMapPanelVisible, toggleMindMapPanel, mindMapPanelWidth, setMindMapPanelWidth, splitViewMode, setSplitViewMode } = useUiStore();
+  const { startDrag } = useDrag();
   const { pdfDocument } = usePdfDocument();
   const { filePath, setFilePath, currentPage, setCurrentPage, setZoomLevel, setViewMode } = usePdfStore();
   const { addDocument, updateDocumentProgress } = useLibraryStore();
@@ -29,7 +31,7 @@ function App() {
     goToFirstPage,
     goToLastPage,
   } = usePdfStore();
-  const { undo, redo, setCurrentTool, selectedAnnotationIds, clearSelection } = useAnnotationStore();
+  const { undo, redo, setCurrentTool, selectedAnnotationIds } = useAnnotationStore();
   const { findShortcutByEvent } = useSettingsStore();
 
   // Apply theme on mount and when it changes
@@ -398,73 +400,8 @@ function App() {
     ? getMindMap(activeMindMapId)?.studyGroupId || ""
     : "";
 
-  // Global handler reference for annotation drag cleanup
-  const annotationDragHandlerRef = useRef<((e: DragEvent) => void) | null>(null);
-
-  // Handle drag start for selected annotations
-  const handleAnnotationDragStart = useCallback((e: React.DragEvent) => {
-    console.log("[App] Annotation drag start, selectedAnnotationIds:", selectedAnnotationIds.size);
-
-    if (selectedAnnotationIds.size === 0) {
-      console.log("[App] No annotations selected, cancelling drag");
-      return;
-    }
-
-    // Get document info from active tab
-    const activeTab = getActiveTab();
-    const documentId = activeTab?.documentId || null;
-
-    const dragData = {
-      annotationIds: Array.from(selectedAnnotationIds),
-      documentId,
-      filePath: filePath,
-    };
-
-    console.log("[App] Setting drag data:", dragData);
-    e.dataTransfer.setData("application/json", JSON.stringify(dragData));
-    e.dataTransfer.setData("text/plain", "annotation-drag"); // Fallback
-    e.dataTransfer.effectAllowed = "copyMove";
-
-    // CRITICAL: Add global handler IMMEDIATELY to prevent forbidden cursor
-    // Without this, the browser shows forbidden cursor on all non-drop-zone elements
-    document.body.classList.add("annotation-dragging");
-
-    const globalHandler = (ev: DragEvent) => {
-      ev.preventDefault();
-      if (ev.dataTransfer) {
-        ev.dataTransfer.dropEffect = "copy";
-      }
-    };
-    annotationDragHandlerRef.current = globalHandler;
-    document.addEventListener("dragover", globalHandler);
-    document.addEventListener("dragenter", globalHandler);
-  }, [selectedAnnotationIds, getActiveTab, filePath]);
-
-  // Handle drag end for annotations
-  const handleAnnotationDragEnd = useCallback(() => {
-    clearSelection();
-    document.body.classList.remove("annotation-dragging");
-    if (annotationDragHandlerRef.current) {
-      document.removeEventListener("dragover", annotationDragHandlerRef.current);
-      document.removeEventListener("dragenter", annotationDragHandlerRef.current);
-      annotationDragHandlerRef.current = null;
-    }
-  }, [clearSelection]);
-
   // Check if we should show the drag handle
   const hasSelectedAnnotations = selectedAnnotationIds.size > 0;
-
-  // Cleanup annotation drag handler on unmount
-  useEffect(() => {
-    return () => {
-      document.body.classList.remove("annotation-dragging");
-      if (annotationDragHandlerRef.current) {
-        document.removeEventListener("dragover", annotationDragHandlerRef.current);
-        document.removeEventListener("dragenter", annotationDragHandlerRef.current);
-        annotationDragHandlerRef.current = null;
-      }
-    };
-  }, []);
 
   return (
     <div className="flex flex-col h-screen bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100">
@@ -489,10 +426,18 @@ function App() {
                   {/* Drag handle for selected annotations */}
                   {hasSelectedAnnotations && mindMapPanelVisible && splitViewMode === "split" && (
                     <div
-                      draggable
-                      onDragStart={handleAnnotationDragStart}
-                      onDragEnd={handleAnnotationDragEnd}
-                      className="absolute bottom-4 right-4 z-50 flex items-center gap-2 px-3 py-2 bg-purple-600 text-white rounded-lg shadow-lg cursor-grab active:cursor-grabbing hover:bg-purple-700 transition-colors"
+                      onMouseDown={(e) => {
+                        if (e.button !== 0) return;
+                        e.preventDefault();
+                        const activeTab = getActiveTab();
+                        startDrag({
+                          type: "annotation",
+                          annotationIds: Array.from(selectedAnnotationIds),
+                          documentId: activeTab?.documentId || null,
+                          filePath: filePath,
+                        }, e.clientX, e.clientY);
+                      }}
+                      className="absolute bottom-4 right-4 z-50 flex items-center gap-2 px-3 py-2 bg-purple-600 text-white rounded-lg shadow-lg cursor-grab active:cursor-grabbing hover:bg-purple-700 transition-colors select-none"
                     >
                       <GripVertical className="w-4 h-4" />
                       <span className="text-sm font-medium">
