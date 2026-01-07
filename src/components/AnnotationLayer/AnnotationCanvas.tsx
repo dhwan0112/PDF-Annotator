@@ -38,7 +38,7 @@ export function AnnotationCanvas({
   marginOffset = 0,
 }: AnnotationCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const { currentTool, getCurrentColor, getStrokeWidth, getHighlightOpacity, addAnnotation, deleteAnnotation, getAnnotationsForPage, getArrowSettings, selectAnnotations, clearSelection, selectedAnnotationIds } =
+  const { currentTool, selectionMode, getCurrentColor, getStrokeWidth, getHighlightOpacity, addAnnotation, deleteAnnotation, getAnnotationsForPage, getArrowSettings, selectAnnotations, clearSelection, selectedAnnotationIds } =
     useAnnotationStore();
   const currentColor = getCurrentColor();
   const strokeWidth = getStrokeWidth();
@@ -51,6 +51,7 @@ export function AnnotationCanvas({
   const [rectPreview, setRectPreview] = useState<RectPreview | null>(null);
   const [arrowPreview, setArrowPreview] = useState<ArrowPreview | null>(null);
   const [lassoPoints, setLassoPoints] = useState<Point[]>([]);
+  const [selectionRectPreview, setSelectionRectPreview] = useState<RectPreview | null>(null);
 
   // Get annotations for this page
   const annotations = getAnnotationsForPage(pageNumber);
@@ -280,6 +281,47 @@ export function AnnotationCanvas({
 
     return selectedIds;
   }, [annotations, isAnnotationInLasso]);
+
+  // Check if annotation intersects with selection rectangle
+  const isAnnotationInRect = useCallback((annotation: Annotation, selectionRect: Rect): boolean => {
+    const bounds = getAnnotationBounds(annotation);
+    if (!bounds) return false;
+
+    // Check for intersection between two rectangles
+    return !(
+      bounds.x + bounds.width < selectionRect.x ||
+      selectionRect.x + selectionRect.width < bounds.x ||
+      bounds.y + bounds.height < selectionRect.y ||
+      selectionRect.y + selectionRect.height < bounds.y
+    );
+  }, [getAnnotationBounds]);
+
+  // Find all annotations within selection rectangle
+  const findAnnotationsInRect = useCallback((selectionRect: Rect): string[] => {
+    const selectedIds: string[] = [];
+
+    for (const annotation of annotations) {
+      if (isAnnotationInRect(annotation, selectionRect)) {
+        selectedIds.push(annotation.id);
+      }
+    }
+
+    return selectedIds;
+  }, [annotations, isAnnotationInRect]);
+
+  // Find only text annotations (highlight, underline, strikeout) within selection rectangle
+  const findTextAnnotationsInRect = useCallback((selectionRect: Rect): string[] => {
+    const selectedIds: string[] = [];
+    const textTypes = ["highlight", "underline", "strikeout"];
+
+    for (const annotation of annotations) {
+      if (textTypes.includes(annotation.type) && isAnnotationInRect(annotation, selectionRect)) {
+        selectedIds.push(annotation.id);
+      }
+    }
+
+    return selectedIds;
+  }, [annotations, isAnnotationInRect]);
 
   // Erase annotation at point
   const eraseAtPoint = useCallback(
@@ -655,6 +697,28 @@ export function AnnotationCanvas({
       ctx.restore();
     }
 
+    // Draw rectangle selection preview
+    if (selectionRectPreview) {
+      ctx.save();
+      ctx.strokeStyle = "#3b82f6";
+      ctx.lineWidth = 2;
+      ctx.setLineDash([5, 5]);
+      ctx.globalAlpha = 0.8;
+
+      const x = Math.min(selectionRectPreview.startX, selectionRectPreview.endX) * scale + marginOffset;
+      const y = Math.min(selectionRectPreview.startY, selectionRectPreview.endY) * scale;
+      const w = Math.abs(selectionRectPreview.endX - selectionRectPreview.startX) * scale;
+      const h = Math.abs(selectionRectPreview.endY - selectionRectPreview.startY) * scale;
+
+      ctx.strokeRect(x, y, w, h);
+
+      // Fill with semi-transparent blue
+      ctx.fillStyle = "#3b82f6";
+      ctx.globalAlpha = 0.1;
+      ctx.fillRect(x, y, w, h);
+      ctx.restore();
+    }
+
     // Draw selection highlight for selected annotations on this page
     if (selectedAnnotationIds.size > 0) {
       ctx.save();
@@ -676,7 +740,7 @@ export function AnnotationCanvas({
       }
       ctx.restore();
     }
-  }, [inkAnnotations, highlighterInkAnnotations, rectAnnotations, arrowAnnotations, currentTool, currentColor, strokeWidth, highlightOpacity, arrowSettings, drawStroke, drawRect, drawArrow, rectPreview, arrowPreview, lassoPoints, scale, marginOffset, selectedAnnotationIds, annotations, getAnnotationBounds]);
+  }, [inkAnnotations, highlighterInkAnnotations, rectAnnotations, arrowAnnotations, currentTool, currentColor, strokeWidth, highlightOpacity, arrowSettings, drawStroke, drawRect, drawArrow, rectPreview, arrowPreview, lassoPoints, selectionRectPreview, scale, marginOffset, selectedAnnotationIds, annotations, getAnnotationBounds]);
 
   // Re-render when annotations change
   useEffect(() => {
@@ -702,9 +766,19 @@ export function AnnotationCanvas({
       isDrawingRef.current = true;
 
       if (currentTool === "select") {
-        // Start lasso selection
-        setLassoPoints([pdfPoint]);
         clearSelection();
+        if (selectionMode === "lasso") {
+          // Start lasso selection
+          setLassoPoints([pdfPoint]);
+        } else if (selectionMode === "rectangle" || selectionMode === "text") {
+          // Start rectangle selection
+          setSelectionRectPreview({
+            startX: pdfPoint.x,
+            startY: pdfPoint.y,
+            endX: pdfPoint.x,
+            endY: pdfPoint.y,
+          });
+        }
       } else if (currentTool === "eraser") {
         // Clear tracked erased IDs for new eraser stroke
         erasedIdsRef.current.clear();
@@ -730,7 +804,7 @@ export function AnnotationCanvas({
         currentStrokeRef.current = [point];
       }
     },
-    [currentTool, screenToPdf, eraseAtPoint, clearSelection]
+    [currentTool, selectionMode, screenToPdf, eraseAtPoint, clearSelection]
   );
 
   const handlePointerMove = useCallback(
@@ -745,8 +819,15 @@ export function AnnotationCanvas({
       const pdfPoint = screenToPdf(x, y);
 
       if (currentTool === "select") {
-        // Add point to lasso path
-        setLassoPoints((prev) => [...prev, pdfPoint]);
+        if (selectionMode === "lasso") {
+          // Add point to lasso path
+          setLassoPoints((prev) => [...prev, pdfPoint]);
+        } else if (selectionMode === "rectangle" || selectionMode === "text") {
+          // Update rectangle selection preview
+          setSelectionRectPreview((prev) =>
+            prev ? { ...prev, endX: pdfPoint.x, endY: pdfPoint.y } : null
+          );
+        }
         renderAnnotations();
       } else if (currentTool === "eraser") {
         eraseAtPoint(pdfPoint);
@@ -769,7 +850,7 @@ export function AnnotationCanvas({
         renderAnnotations();
       }
     },
-    [currentTool, screenToPdf, renderAnnotations, eraseAtPoint]
+    [currentTool, selectionMode, screenToPdf, renderAnnotations, eraseAtPoint]
   );
 
   const handlePointerUp = useCallback(
@@ -780,14 +861,42 @@ export function AnnotationCanvas({
       isDrawingRef.current = false;
 
       if (currentTool === "select") {
-        // Complete lasso selection
-        if (lassoPoints.length >= 3) {
-          const selectedIds = findAnnotationsInLasso(lassoPoints);
+        if (selectionMode === "lasso") {
+          // Complete lasso selection
+          if (lassoPoints.length >= 3) {
+            const selectedIds = findAnnotationsInLasso(lassoPoints);
+            if (selectedIds.length > 0) {
+              selectAnnotations(selectedIds);
+            }
+          }
+          setLassoPoints([]);
+        } else if (selectionMode === "rectangle" && selectionRectPreview) {
+          // Complete rectangle selection - select all annotations
+          const rect = {
+            x: Math.min(selectionRectPreview.startX, selectionRectPreview.endX),
+            y: Math.min(selectionRectPreview.startY, selectionRectPreview.endY),
+            width: Math.abs(selectionRectPreview.endX - selectionRectPreview.startX),
+            height: Math.abs(selectionRectPreview.endY - selectionRectPreview.startY),
+          };
+          const selectedIds = findAnnotationsInRect(rect);
           if (selectedIds.length > 0) {
             selectAnnotations(selectedIds);
           }
+          setSelectionRectPreview(null);
+        } else if (selectionMode === "text" && selectionRectPreview) {
+          // Complete text selection - only select text annotations (highlight, underline, strikeout)
+          const rect = {
+            x: Math.min(selectionRectPreview.startX, selectionRectPreview.endX),
+            y: Math.min(selectionRectPreview.startY, selectionRectPreview.endY),
+            width: Math.abs(selectionRectPreview.endX - selectionRectPreview.startX),
+            height: Math.abs(selectionRectPreview.endY - selectionRectPreview.startY),
+          };
+          const selectedIds = findTextAnnotationsInRect(rect);
+          if (selectedIds.length > 0) {
+            selectAnnotations(selectedIds);
+          }
+          setSelectionRectPreview(null);
         }
-        setLassoPoints([]);
         renderAnnotations();
         return;
       }
@@ -884,7 +993,7 @@ export function AnnotationCanvas({
       currentStrokeRef.current = [];
       renderAnnotations();
     },
-    [currentTool, currentColor, strokeWidth, highlightOpacity, pageNumber, addAnnotation, renderAnnotations, rectPreview, arrowPreview, arrowSettings, scale, lassoPoints, findAnnotationsInLasso, selectAnnotations]
+    [currentTool, selectionMode, currentColor, strokeWidth, highlightOpacity, pageNumber, addAnnotation, renderAnnotations, rectPreview, arrowPreview, arrowSettings, scale, lassoPoints, findAnnotationsInLasso, selectAnnotations, selectionRectPreview, findAnnotationsInRect, findTextAnnotationsInRect]
   );
 
   const handlePointerCancel = useCallback(() => {
@@ -893,6 +1002,7 @@ export function AnnotationCanvas({
     setRectPreview(null);
     setArrowPreview(null);
     setLassoPoints([]);
+    setSelectionRectPreview(null);
     renderAnnotations();
   }, [renderAnnotations]);
 
