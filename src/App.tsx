@@ -193,9 +193,19 @@ function App() {
   }, [getMindMapsForGroup, createMindMap]);
 
   // Mind map ID for split panel - based on active tab's group
-  const splitPanelMindMapId = activeTabGroupId
-    ? getMindMapsForGroup(activeTabGroupId)[0]?.id || null
-    : null;
+  // Auto-create mind map when panel is open and group exists but no mind map
+  const splitPanelMindMapId = (() => {
+    if (!activeTabGroupId) return null;
+    const existingMindMaps = getMindMapsForGroup(activeTabGroupId);
+    if (existingMindMaps.length > 0) {
+      return existingMindMaps[0].id;
+    }
+    // If panel is visible and group exists but no mind map, create one
+    if (mindMapPanelVisible) {
+      return getOrCreateMindMapForGroup(activeTabGroupId);
+    }
+    return null;
+  })();
 
   // Handle toggle mind map panel - create if needed
   const handleToggleMindMapPanel = useCallback(() => {
