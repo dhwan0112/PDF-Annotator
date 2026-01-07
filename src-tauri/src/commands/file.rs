@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::Path;
 use tauri_plugin_dialog::DialogExt;
+use crate::pdf::{read_pdf_metadata_lopdf, extract_text_from_pdf, ExtendedPdfMetadata};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct PdfMetadata {
@@ -34,14 +35,38 @@ pub async fn read_pdf_metadata(file_path: String) -> Result<PdfMetadata, String>
         .map(|n| n.to_string_lossy().to_string())
         .unwrap_or_else(|| "Unknown".to_string());
 
-    // TODO: Implement actual PDF metadata reading with a PDF library
-    Ok(PdfMetadata {
-        path: file_path,
-        file_name,
-        page_count: None,
-        title: None,
-        author: None,
-    })
+    // Try to read metadata using lopdf
+    match read_pdf_metadata_lopdf(&file_path) {
+        Ok(extended) => Ok(PdfMetadata {
+            path: file_path,
+            file_name,
+            page_count: Some(extended.page_count),
+            title: extended.title,
+            author: extended.author,
+        }),
+        Err(_) => {
+            // Fallback to basic metadata
+            Ok(PdfMetadata {
+                path: file_path,
+                file_name,
+                page_count: None,
+                title: None,
+                author: None,
+            })
+        }
+    }
+}
+
+/// Get extended PDF metadata including all info fields
+#[tauri::command]
+pub async fn read_pdf_metadata_extended(file_path: String) -> Result<ExtendedPdfMetadata, String> {
+    read_pdf_metadata_lopdf(&file_path)
+}
+
+/// Extract text from specified pages of a PDF
+#[tauri::command]
+pub async fn extract_pdf_text(file_path: String, page_numbers: Vec<u32>) -> Result<String, String> {
+    extract_text_from_pdf(&file_path, &page_numbers)
 }
 
 /// Get the annotation file path for a PDF

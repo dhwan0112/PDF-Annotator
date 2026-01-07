@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import {
   Search,
   Grid,
@@ -6,9 +6,10 @@ import {
   FileText,
   RefreshCw,
 } from "lucide-react";
-import { useLibraryStore } from "../../stores";
+import { useLibraryStore, type Document } from "../../stores";
 import { DocumentCard } from "./DocumentCard";
 import { ProjectSidebar } from "./ProjectSidebar";
+import { BibTeXEditor } from "../BibTeX";
 
 interface LibraryProps {
   onOpenDocument: (filePath: string) => void;
@@ -109,9 +110,17 @@ export function Library({ onOpenDocument, onOpenMindMap }: LibraryProps) {
     });
   }, [filteredDocuments]);
 
+  // BibTeX editor state
+  const [bibtexDocument, setBibtexDocument] = useState<Document | null>(null);
+
   const handleOpenDocument = (doc: typeof documents[0]) => {
     onOpenDocument(doc.file_path);
   };
+
+  // Handle showing BibTeX editor
+  const handleShowBibTeX = useCallback((doc: Document) => {
+    setBibtexDocument(doc);
+  }, []);
 
   const handleToggleTag = async (
     docId: string,
@@ -293,6 +302,7 @@ export function Library({ onOpenDocument, onOpenMindMap }: LibraryProps) {
                   onDelete={deleteDocument}
                   onSetProject={setDocumentProject}
                   onToggleTag={handleToggleTag}
+                  onShowBibTeX={handleShowBibTeX}
                 />
               ))}
             </div>
@@ -310,6 +320,7 @@ export function Library({ onOpenDocument, onOpenMindMap }: LibraryProps) {
                   onDelete={deleteDocument}
                   onSetProject={setDocumentProject}
                   onToggleTag={handleToggleTag}
+                  onShowBibTeX={handleShowBibTeX}
                 />
               ))}
             </div>
@@ -329,6 +340,17 @@ export function Library({ onOpenDocument, onOpenMindMap }: LibraryProps) {
           )}
         </div>
       </div>
+
+      {/* BibTeX Editor Modal */}
+      {bibtexDocument && (
+        <BibTeXEditor
+          documentId={bibtexDocument.id}
+          filePath={bibtexDocument.file_path}
+          documentTitle={bibtexDocument.title ?? undefined}
+          documentAuthor={bibtexDocument.author ?? undefined}
+          onClose={() => setBibtexDocument(null)}
+        />
+      )}
     </div>
   );
 }

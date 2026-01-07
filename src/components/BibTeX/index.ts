@@ -1,0 +1,1 @@
+export { BibTeXEditor } from "./BibTeXEditor";
