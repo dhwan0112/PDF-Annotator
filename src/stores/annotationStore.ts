@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import type { Annotation, AnnotationTool } from "../types";
+import type { Annotation, AnnotationTool, SelectionMode } from "../types";
 
 // Tool-specific settings
 export interface ToolSettings {
@@ -27,6 +27,9 @@ interface AnnotationState {
   // Current tool
   currentTool: AnnotationTool;
 
+  // Selection mode (lasso, rectangle, text)
+  selectionMode: SelectionMode;
+
   // Last used drawing tool (for pen tablet auto-switch)
   lastDrawingTool: AnnotationTool;
 
@@ -47,6 +50,7 @@ interface AnnotationState {
 
   // Actions
   setCurrentTool: (tool: AnnotationTool) => void;
+  setSelectionMode: (mode: SelectionMode) => void;
   switchToPenTool: () => void; // For pen tablet detection
   getToolSettings: (tool: AnnotationTool) => ToolSettings;
   setToolColor: (tool: AnnotationTool, color: string) => void;
@@ -68,6 +72,7 @@ interface AnnotationState {
   addAnnotation: (annotation: Annotation) => void;
   updateAnnotation: (id: string, updates: Partial<Annotation>) => void;
   deleteAnnotation: (id: string) => void;
+  deleteSelectedAnnotations: () => void;
   selectAnnotation: (id: string | null) => void;
   // Multi-select methods
   selectAnnotations: (ids: string[]) => void;
@@ -130,6 +135,7 @@ export const useAnnotationStore = create<AnnotationState>()(
       // Initial state
       annotations: new Map(),
       currentTool: "select",
+      selectionMode: "rectangle",
       lastDrawingTool: "pen",
       toolSettings: { ...DEFAULT_TOOL_SETTINGS },
       arrowSettings: { ...DEFAULT_ARROW_SETTINGS },
@@ -146,6 +152,10 @@ export const useAnnotationStore = create<AnnotationState>()(
         } else {
           set({ currentTool: tool });
         }
+      },
+
+      setSelectionMode: (mode) => {
+        set({ selectionMode: mode });
       },
 
       // Switch to last used drawing tool (for pen tablet)
@@ -291,6 +301,36 @@ export const useAnnotationStore = create<AnnotationState>()(
             return;
           }
         }
+      },
+
+      deleteSelectedAnnotations: () => {
+        const { annotations, undoStack, selectedAnnotationIds } = get();
+        if (selectedAnnotationIds.size === 0) return;
+
+        const newAnnotations = new Map(annotations);
+        const newUndoStack = [...undoStack];
+
+        // Delete all selected annotations
+        for (const [pageNum, pageAnnotations] of annotations) {
+          const toDelete = pageAnnotations.filter((a) => selectedAnnotationIds.has(a.id));
+          if (toDelete.length > 0) {
+            const remaining = pageAnnotations.filter((a) => !selectedAnnotationIds.has(a.id));
+            newAnnotations.set(pageNum, remaining);
+
+            // Add to undo stack
+            for (const deleted of toDelete) {
+              newUndoStack.push({ type: "delete", annotation: deleted });
+            }
+          }
+        }
+
+        set({
+          annotations: newAnnotations,
+          selectedAnnotationIds: new Set(),
+          selectedAnnotationId: null,
+          undoStack: newUndoStack,
+          redoStack: [],
+        });
       },
 
       selectAnnotation: (id) => {
@@ -482,6 +522,7 @@ export const useAnnotationStore = create<AnnotationState>()(
         toolSettings: state.toolSettings,
         lastDrawingTool: state.lastDrawingTool,
         arrowSettings: state.arrowSettings,
+        selectionMode: state.selectionMode,
       }),
     }
   )

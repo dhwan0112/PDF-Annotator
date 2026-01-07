@@ -12,6 +12,7 @@ import {
   Key,
   X,
 } from "lucide-react";
+import { open } from "@tauri-apps/plugin-shell";
 import { useSyncStore } from "../../stores";
 import { exportSyncData, importSyncData } from "../../services/syncService";
 
@@ -58,8 +59,8 @@ export function SyncSettings({ onClose }: SyncSettingsProps) {
       const url = await connectDropbox(appKey.trim());
       setAuthUrl(url);
       setShowCallbackInput(true);
-      // Open auth URL in browser
-      window.open(url, "_blank");
+      // Open auth URL in browser using Tauri shell
+      await open(url);
     } catch (err) {
       console.error("Failed to start auth:", err);
     }
@@ -273,7 +274,7 @@ export function SyncSettings({ onClose }: SyncSettingsProps) {
                       </button>
                       {authUrl && (
                         <button
-                          onClick={() => window.open(authUrl, "_blank")}
+                          onClick={() => open(authUrl)}
                           className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-1"
                         >
                           <ExternalLink className="w-4 h-4" />

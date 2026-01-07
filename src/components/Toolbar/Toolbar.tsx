@@ -30,11 +30,14 @@ import {
   Settings2,
   Keyboard,
   Cloud,
+  Lasso,
+  SquareDashed,
+  Type,
 } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
 import { save } from "@tauri-apps/plugin-dialog";
 import { readFile, writeFile } from "@tauri-apps/plugin-fs";
-import type { AnnotationTool } from "../../types";
+import type { AnnotationTool, SelectionMode } from "../../types";
 import { ToolSettingsPopover } from "./ToolSettingsPopover";
 import { KeyboardShortcutsSettings, SyncSettings } from "../Settings";
 import { exportAnnotationsToPdf } from "../../utils";
@@ -51,8 +54,15 @@ const tools: { id: AnnotationTool; icon: typeof Pen; label: string }[] = [
   { id: "arrow", icon: ArrowRight, label: "Arrow" },
 ];
 
+// Selection mode options
+const selectionModes: { id: SelectionMode; icon: typeof Lasso; label: string }[] = [
+  { id: "lasso", icon: Lasso, label: "Lasso 선택" },
+  { id: "rectangle", icon: SquareDashed, label: "사각형 선택" },
+  { id: "text", icon: Type, label: "텍스트 선택" },
+];
+
 export function Toolbar() {
-  const { currentTool, setCurrentTool, undo, redo, undoStack, redoStack, getToolSettings } =
+  const { currentTool, setCurrentTool, selectionMode, setSelectionMode, undo, redo, undoStack, redoStack, getToolSettings } =
     useAnnotationStore();
   const {
     filePath,
@@ -343,6 +353,25 @@ export function Toolbar() {
           >
             <Settings2 className="w-4 h-4" />
           </button>
+        )}
+        {/* Selection mode buttons - show when select tool is active */}
+        {currentTool === "select" && (
+          <div className="flex items-center gap-0.5 ml-1 pl-1 border-l border-gray-300 dark:border-gray-600">
+            {selectionModes.map(({ id, icon: Icon, label }) => (
+              <button
+                key={id}
+                onClick={() => setSelectionMode(id)}
+                className={`p-1.5 rounded transition-colors ${
+                  selectionMode === id
+                    ? "bg-blue-100 dark:bg-blue-900/50 text-blue-600 dark:text-blue-400"
+                    : "text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700"
+                }`}
+                title={label}
+              >
+                <Icon className="w-4 h-4" />
+              </button>
+            ))}
+          </div>
         )}
       </div>
 
