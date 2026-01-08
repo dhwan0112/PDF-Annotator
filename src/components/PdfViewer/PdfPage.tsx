@@ -222,6 +222,72 @@ export const PdfPage = memo(function PdfPage({
         section.appendChild(link);
         linkLayerDiv.appendChild(section);
       }
+
+      // Also detect text-based URLs that aren't proper link annotations
+      const textContent = await page.getTextContent();
+      const urlRegex = /(https?:\/\/[^\s<>"{}|\\^`[\]]+)/gi;
+
+      // Track existing link rects to avoid duplicates
+      const existingLinkRects = linkAnnotations.map(a => a.rect).filter(Boolean);
+
+      for (const item of textContent.items) {
+        const textItem = item as { str: string; transform: number[]; width: number; height: number };
+        if (!textItem.str) continue;
+
+        const matches = textItem.str.match(urlRegex);
+        if (!matches) continue;
+
+        for (const url of matches) {
+          // Get position from transform matrix
+          const [, , , scaleY, tx, ty] = textItem.transform;
+          const fontHeight = Math.abs(scaleY);
+
+          // Check if this URL is already covered by an annotation link
+          const isAlreadyCovered = existingLinkRects.some(rect => {
+            if (!rect) return false;
+            const [rx1, ry1, rx2, ry2] = rect;
+            return tx >= rx1 - 5 && tx <= rx2 + 5 && ty >= ry1 - 5 && ty <= ry2 + 5;
+          });
+
+          if (isAlreadyCovered) continue;
+
+          // Calculate position in viewport coordinates
+          const startX = tx * scale;
+          const startY = (viewport.height / scale - ty) * scale - fontHeight * scale;
+          const linkWidth = textItem.width * scale;
+          const linkHeight = fontHeight * scale * 1.2;
+
+          // Create clickable element for the URL
+          const section = document.createElement("section");
+          section.className = "textUrlLink";
+          section.style.cssText = `position: absolute; left: ${startX}px; top: ${startY}px; width: ${linkWidth}px; height: ${linkHeight}px; pointer-events: auto;`;
+
+          const link = document.createElement("a");
+          link.href = url;
+          link.target = "_blank";
+          link.rel = "noopener noreferrer";
+          link.title = url;
+          link.style.cssText = `
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: block;
+            cursor: pointer;
+          `;
+
+          link.addEventListener("mouseenter", () => {
+            link.style.backgroundColor = "rgba(255, 255, 0, 0.3)";
+          });
+          link.addEventListener("mouseleave", () => {
+            link.style.backgroundColor = "transparent";
+          });
+
+          section.appendChild(link);
+          linkLayerRef.current?.appendChild(section);
+        }
+      }
     });
   }, [page, pdfDocument, scale, rotation, isVisible, setCurrentPage]);
 
