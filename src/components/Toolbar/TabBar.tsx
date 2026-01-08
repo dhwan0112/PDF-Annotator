@@ -162,7 +162,14 @@ export function TabBar({ onTabChange }: TabBarProps) {
     if ((e.target as HTMLElement).closest("button")) return;
 
     e.preventDefault();
-    startDrag({ type: "tab", tabId }, e.clientX, e.clientY);
+    // Pass onCancel callback to select the tab if drag threshold isn't reached
+    const tab = tabs.find(t => t.id === tabId);
+    startDrag({ type: "tab", tabId }, e.clientX, e.clientY, () => {
+      if (tab) {
+        setActiveTab(tabId);
+        onTabChange?.(tab);
+      }
+    });
   };
 
   // Handle tab drop
