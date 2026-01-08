@@ -99,14 +99,43 @@ export function PdfViewer({ pdfDocument }: PdfViewerProps) {
     }, 100);
   }, [pdfDocument, viewMode, setCurrentPage]);
 
-  // Scroll to page when currentPage changes (single page mode or navigation)
+  // Track if page change was from user navigation (not scroll)
+  const isNavigatingRef = useRef(false);
+  const lastScrolledPageRef = useRef(currentPage);
+
+  // Scroll to page when currentPage changes (from navigation, not scroll)
   useEffect(() => {
     if (!containerRef.current || !pdfDocument) return;
 
     if (viewMode === "single") {
       setVisiblePages([currentPage]);
+    } else if (viewMode === "continuous") {
+      // Only scroll if the page change wasn't from scrolling
+      if (lastScrolledPageRef.current !== currentPage) {
+        isNavigatingRef.current = true;
+
+        const container = containerRef.current;
+        const pageElement = container.querySelector(`[data-page-number="${currentPage}"]`);
+
+        if (pageElement) {
+          pageElement.scrollIntoView({ behavior: "smooth", block: "start" });
+        }
+
+        // Reset after scroll animation
+        setTimeout(() => {
+          isNavigatingRef.current = false;
+          lastScrolledPageRef.current = currentPage;
+        }, 500);
+      }
     }
   }, [currentPage, viewMode, pdfDocument]);
+
+  // Update lastScrolledPage when scroll updates currentPage
+  useEffect(() => {
+    if (!isNavigatingRef.current) {
+      lastScrolledPageRef.current = currentPage;
+    }
+  }, [currentPage]);
 
   // Set up scroll listener
   useEffect(() => {
