@@ -28,7 +28,7 @@ interface DragState {
 
 interface DragContextType {
   dragState: DragState;
-  startDrag: (data: DragData, startX: number, startY: number) => void;
+  startDrag: (data: DragData, startX: number, startY: number, onCancel?: () => void) => void;
   updateDrag: (x: number, y: number) => void;
   endDrag: () => DragData;
   cancelDrag: () => void;
@@ -62,11 +62,11 @@ export function DragProvider({ children }: { children: React.ReactNode }) {
 
   const dropZonesRef = useRef<Map<string, DropZone>>(new Map());
   const dragDataRef = useRef<DragData>(null);
-  const pendingDragRef = useRef<{ data: DragData; startX: number; startY: number } | null>(null);
+  const pendingDragRef = useRef<{ data: DragData; startX: number; startY: number; onCancel?: () => void } | null>(null);
 
-  const startDrag = useCallback((data: DragData, startX: number, startY: number) => {
+  const startDrag = useCallback((data: DragData, startX: number, startY: number, onCancel?: () => void) => {
     // Start in pending state - don't activate drag until threshold is reached
-    pendingDragRef.current = { data, startX, startY };
+    pendingDragRef.current = { data, startX, startY, onCancel };
     dragDataRef.current = data;
     setDragState({
       isDragging: false,
@@ -174,7 +174,12 @@ export function DragProvider({ children }: { children: React.ReactNode }) {
     const handleMouseUp = (e: MouseEvent) => {
       // If still pending (threshold not reached), just cancel - treat as click
       if (dragState.isPendingDrag) {
+        // Call the onCancel callback if provided (e.g., to select a tab)
+        const onCancel = pendingDragRef.current?.onCancel;
         cancelDrag();
+        if (onCancel) {
+          onCancel();
+        }
         return;
       }
 
