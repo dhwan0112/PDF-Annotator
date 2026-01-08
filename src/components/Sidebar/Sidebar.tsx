@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { ThumbnailPanel } from "./ThumbnailPanel";
 import { BookmarkPanel } from "./BookmarkPanel";
+import { OutlinePanel } from "./OutlinePanel";
 import type { PDFDocumentProxy } from "pdfjs-dist";
 
 const panels = [
@@ -137,7 +138,9 @@ export function Sidebar({ pdfDocument }: SidebarProps) {
               <div className="p-2"><AnnotationsPanel /></div>
             )}
             {activePanel === "outline" && (
-              <div className="p-2"><OutlinePanel /></div>
+              <div className="h-full overflow-auto p-2">
+                <OutlinePanel pdfDocument={pdfDocument ?? null} />
+              </div>
             )}
           </div>
         </div>
@@ -163,14 +166,6 @@ function AnnotationsPanel() {
   return (
     <div className="text-gray-500 dark:text-gray-400 text-sm p-2">
       Annotations will appear here.
-    </div>
-  );
-}
-
-function OutlinePanel() {
-  return (
-    <div className="text-gray-500 dark:text-gray-400 text-sm p-2">
-      Document outline will appear here when a PDF is loaded.
     </div>
   );
 }
