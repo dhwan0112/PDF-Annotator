@@ -4,10 +4,15 @@ import { usePdfStore } from "../../stores";
 
 interface ThumbnailPanelProps {
   pdfDocument: PDFDocumentProxy | null;
+  sidebarWidth?: number;
 }
 
-export function ThumbnailPanel({ pdfDocument }: ThumbnailPanelProps) {
+export function ThumbnailPanel({ pdfDocument, sidebarWidth = 280 }: ThumbnailPanelProps) {
   const { currentPage, setCurrentPage } = usePdfStore();
+
+  // Calculate thumbnail width based on sidebar width
+  // Subtract: panel tabs (48px) + padding (16px) + scrollbar margin (16px)
+  const thumbnailWidth = Math.max(80, sidebarWidth - 48 - 16 - 16);
 
   if (!pdfDocument) {
     return (
@@ -29,6 +34,7 @@ export function ThumbnailPanel({ pdfDocument }: ThumbnailPanelProps) {
           pageNumber={pageNum}
           isActive={pageNum === currentPage}
           onClick={() => setCurrentPage(pageNum)}
+          thumbnailWidth={thumbnailWidth}
         />
       ))}
     </div>
@@ -40,6 +46,7 @@ interface ThumbnailItemProps {
   pageNumber: number;
   isActive: boolean;
   onClick: () => void;
+  thumbnailWidth: number;
 }
 
 const ThumbnailItem = memo(function ThumbnailItem({
@@ -47,6 +54,7 @@ const ThumbnailItem = memo(function ThumbnailItem({
   pageNumber,
   isActive,
   onClick,
+  thumbnailWidth,
 }: ThumbnailItemProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [rendered, setRendered] = useState(false);
@@ -122,11 +130,12 @@ const ThumbnailItem = memo(function ThumbnailItem({
     <div
       ref={containerRef}
       onClick={onClick}
-      className={`thumbnail-item p-2 rounded-lg border-2 transition-all ${
+      className={`thumbnail-item p-2 rounded-lg border-2 transition-all cursor-pointer ${
         isActive
           ? "border-blue-500 bg-blue-50 dark:bg-blue-900/30"
           : "border-transparent hover:border-gray-300 dark:hover:border-gray-600"
       }`}
+      style={{ width: thumbnailWidth }}
     >
       <div className="relative bg-gray-200 dark:bg-gray-700 shadow-sm rounded overflow-hidden">
         <canvas
