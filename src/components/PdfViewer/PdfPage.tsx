@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, memo } from "react";
 import type { PDFDocumentProxy, PDFPageProxy } from "pdfjs-dist";
 import { TextLayer } from "pdfjs-dist";
 import { AnnotationLayer, TextSelectionHandler } from "../AnnotationLayer";
+import { usePdfStore } from "../../stores";
 
 interface PdfPageProps {
   pdfDocument: PDFDocumentProxy;
@@ -24,10 +25,12 @@ export const PdfPage = memo(function PdfPage({
 }: PdfPageProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const textLayerRef = useRef<HTMLDivElement>(null);
+  const linkLayerRef = useRef<HTMLDivElement>(null);
   const [page, setPage] = useState<PDFPageProxy | null>(null);
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
   const renderTaskRef = useRef<ReturnType<PDFPageProxy["render"]> | null>(null);
   const textLayerInstanceRef = useRef<TextLayer | null>(null);
+  const { setCurrentPage } = usePdfStore();
 
   // Load page
   useEffect(() => {
@@ -130,6 +133,79 @@ export const PdfPage = memo(function PdfPage({
     };
   }, [page, scale, rotation, isVisible]);
 
+  // Render link/annotation layer (for PDF internal links)
+  useEffect(() => {
+    if (!page || !linkLayerRef.current || !isVisible) return;
+
+    const linkLayerDiv = linkLayerRef.current;
+    linkLayerDiv.innerHTML = "";
+
+    const viewport = page.getViewport({ scale, rotation });
+
+    page.getAnnotations().then(async (annotations) => {
+      if (!linkLayerRef.current) return;
+
+      // Filter to only link annotations
+      const linkAnnotations = annotations.filter(
+        (a) => a.subtype === "Link" && (a.url || a.dest)
+      );
+
+      if (linkAnnotations.length === 0) return;
+
+      // Create link elements manually
+      for (const annotation of linkAnnotations) {
+        const rect = annotation.rect;
+        if (!rect) continue;
+
+        // Transform rect coordinates using viewport
+        const [x1, y1, x2, y2] = viewport.convertToViewportRectangle(rect);
+        const left = Math.min(x1, x2);
+        const top = Math.min(y1, y2);
+        const width = Math.abs(x2 - x1);
+        const height = Math.abs(y2 - y1);
+
+        // Create section element
+        const section = document.createElement("section");
+        section.className = "linkAnnotation";
+        section.style.cssText = `position: absolute; left: ${left}px; top: ${top}px; width: ${width}px; height: ${height}px;`;
+
+        // Create link element
+        const link = document.createElement("a");
+
+        if (annotation.url) {
+          // External URL
+          link.href = annotation.url;
+          link.target = "_blank";
+          link.rel = "noopener noreferrer";
+        } else if (annotation.dest) {
+          // Internal destination
+          link.href = "#";
+          link.onclick = async (e) => {
+            e.preventDefault();
+            try {
+              let explicitDest: unknown[] | null = null;
+              if (typeof annotation.dest === "string") {
+                explicitDest = await pdfDocument.getDestination(annotation.dest);
+              } else if (Array.isArray(annotation.dest)) {
+                explicitDest = annotation.dest;
+              }
+              if (explicitDest && explicitDest[0]) {
+                const ref = explicitDest[0] as { num: number; gen: number };
+                const pageIndex = await pdfDocument.getPageIndex(ref);
+                setCurrentPage(pageIndex + 1);
+              }
+            } catch (err) {
+              console.error("Failed to navigate:", err);
+            }
+          };
+        }
+
+        section.appendChild(link);
+        linkLayerDiv.appendChild(section);
+      }
+    });
+  }, [page, pdfDocument, scale, rotation, isVisible, setCurrentPage]);
+
   // Calculate margin-extended dimensions (always enabled for pen drawing)
   const marginWidth = MARGIN_WIDTH * scale;
   const totalWidth = dimensions.width + marginWidth * 2;
@@ -166,6 +242,13 @@ export const PdfPage = memo(function PdfPage({
             <div
               ref={textLayerRef}
               className="absolute top-0 left-0 text-layer"
+              style={{ width: dimensions.width, height: dimensions.height }}
+            />
+
+            {/* Link Layer (for PDF internal/external links) */}
+            <div
+              ref={linkLayerRef}
+              className="absolute top-0 left-0 annotationLayer"
               style={{ width: dimensions.width, height: dimensions.height }}
             />
 

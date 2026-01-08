@@ -383,7 +383,7 @@ export function TabBar({ onTabChange }: TabBarProps) {
                 style={{ backgroundColor: groupColor, borderColor: groupColor }}
                 onDoubleClick={(e) => e.stopPropagation()}
               />
-              <div className="absolute top-full left-0 mt-1 hidden group-hover/color:flex gap-1 p-1 bg-white dark:bg-gray-800 rounded shadow-lg border border-gray-200 dark:border-gray-600 z-50">
+              <div className="absolute top-full left-0 mt-1 hidden group-hover/color:flex gap-1 p-1 bg-white dark:bg-gray-800 rounded shadow-lg border border-gray-200 dark:border-gray-600 z-[100]">
                 {GROUP_COLORS.map((c) => (
                   <button
                     key={c}
