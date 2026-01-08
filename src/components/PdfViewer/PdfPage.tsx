@@ -167,19 +167,38 @@ export const PdfPage = memo(function PdfPage({
         // Create section element
         const section = document.createElement("section");
         section.className = "linkAnnotation";
-        section.style.cssText = `position: absolute; left: ${left}px; top: ${top}px; width: ${width}px; height: ${height}px;`;
+        section.style.cssText = `position: absolute; left: ${left}px; top: ${top}px; width: ${width}px; height: ${height}px; pointer-events: auto;`;
 
-        // Create link element
+        // Create link element with explicit styles for interactivity
         const link = document.createElement("a");
+        link.style.cssText = `
+          position: absolute;
+          top: 0;
+          left: 0;
+          width: 100%;
+          height: 100%;
+          display: block;
+          cursor: pointer;
+        `;
+
+        // Add hover effect via event listeners
+        link.addEventListener("mouseenter", () => {
+          link.style.backgroundColor = "rgba(255, 255, 0, 0.3)";
+        });
+        link.addEventListener("mouseleave", () => {
+          link.style.backgroundColor = "transparent";
+        });
 
         if (annotation.url) {
           // External URL
           link.href = annotation.url;
           link.target = "_blank";
           link.rel = "noopener noreferrer";
+          link.title = annotation.url;
         } else if (annotation.dest) {
           // Internal destination
           link.href = "#";
+          link.title = "Go to page";
           link.onclick = async (e) => {
             e.preventDefault();
             try {
@@ -248,8 +267,13 @@ export const PdfPage = memo(function PdfPage({
             {/* Link Layer (for PDF internal/external links) */}
             <div
               ref={linkLayerRef}
-              className="absolute top-0 left-0 annotationLayer"
-              style={{ width: dimensions.width, height: dimensions.height }}
+              className="absolute top-0 left-0"
+              style={{
+                width: dimensions.width,
+                height: dimensions.height,
+                zIndex: 10,
+                pointerEvents: "none"
+              }}
             />
 
             {/* Text Selection Handler for highlight/underline/strikeout */}
