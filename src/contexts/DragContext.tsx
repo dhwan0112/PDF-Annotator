@@ -1,5 +1,8 @@
 import React, { createContext, useContext, useState, useCallback, useRef, useEffect } from "react";
 
+// Drag threshold in pixels - must move this far before drag starts
+const DRAG_THRESHOLD = 5;
+
 // Types for drag data
 export interface TabDragData {
   type: "tab";
@@ -17,6 +20,7 @@ export type DragData = TabDragData | AnnotationDragData | null;
 
 interface DragState {
   isDragging: boolean;
+  isPendingDrag: boolean;
   dragData: DragData;
   position: { x: number; y: number };
   startPosition: { x: number; y: number };
@@ -50,6 +54,7 @@ interface DropZone {
 export function DragProvider({ children }: { children: React.ReactNode }) {
   const [dragState, setDragState] = useState<DragState>({
     isDragging: false,
+    isPendingDrag: false,
     dragData: null,
     position: { x: 0, y: 0 },
     startPosition: { x: 0, y: 0 },
@@ -57,15 +62,28 @@ export function DragProvider({ children }: { children: React.ReactNode }) {
 
   const dropZonesRef = useRef<Map<string, DropZone>>(new Map());
   const dragDataRef = useRef<DragData>(null);
+  const pendingDragRef = useRef<{ data: DragData; startX: number; startY: number } | null>(null);
 
   const startDrag = useCallback((data: DragData, startX: number, startY: number) => {
+    // Start in pending state - don't activate drag until threshold is reached
+    pendingDragRef.current = { data, startX, startY };
     dragDataRef.current = data;
     setDragState({
-      isDragging: true,
+      isDragging: false,
+      isPendingDrag: true,
       dragData: data,
       position: { x: startX, y: startY },
       startPosition: { x: startX, y: startY },
     });
+  }, []);
+
+  const activateDrag = useCallback(() => {
+    if (!pendingDragRef.current) return;
+    setDragState(prev => ({
+      ...prev,
+      isDragging: true,
+      isPendingDrag: false,
+    }));
     document.body.style.cursor = "grabbing";
     document.body.style.userSelect = "none";
   }, []);
@@ -98,8 +116,10 @@ export function DragProvider({ children }: { children: React.ReactNode }) {
     }
 
     dragDataRef.current = null;
+    pendingDragRef.current = null;
     setDragState({
       isDragging: false,
+      isPendingDrag: false,
       dragData: null,
       position: { x: 0, y: 0 },
       startPosition: { x: 0, y: 0 },
@@ -112,8 +132,10 @@ export function DragProvider({ children }: { children: React.ReactNode }) {
 
   const cancelDrag = useCallback(() => {
     dragDataRef.current = null;
+    pendingDragRef.current = null;
     setDragState({
       isDragging: false,
+      isPendingDrag: false,
       dragData: null,
       position: { x: 0, y: 0 },
       startPosition: { x: 0, y: 0 },
@@ -133,12 +155,29 @@ export function DragProvider({ children }: { children: React.ReactNode }) {
   // Global mouse event handlers
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
-      if (dragState.isDragging) {
+      // Check if we need to activate pending drag (threshold check)
+      if (dragState.isPendingDrag && pendingDragRef.current) {
+        const { startX, startY } = pendingDragRef.current;
+        const dx = Math.abs(e.clientX - startX);
+        const dy = Math.abs(e.clientY - startY);
+
+        if (dx > DRAG_THRESHOLD || dy > DRAG_THRESHOLD) {
+          // Threshold exceeded - activate actual drag
+          activateDrag();
+          updateDrag(e.clientX, e.clientY);
+        }
+      } else if (dragState.isDragging) {
         updateDrag(e.clientX, e.clientY);
       }
     };
 
     const handleMouseUp = (e: MouseEvent) => {
+      // If still pending (threshold not reached), just cancel - treat as click
+      if (dragState.isPendingDrag) {
+        cancelDrag();
+        return;
+      }
+
       if (dragState.isDragging) {
         // Update position one last time
         setDragState((prev) => ({
@@ -158,7 +197,7 @@ export function DragProvider({ children }: { children: React.ReactNode }) {
     };
 
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && dragState.isDragging) {
+      if (e.key === "Escape" && (dragState.isDragging || dragState.isPendingDrag)) {
         cancelDrag();
       }
     };
@@ -172,7 +211,7 @@ export function DragProvider({ children }: { children: React.ReactNode }) {
       document.removeEventListener("mouseup", handleMouseUp);
       document.removeEventListener("keydown", handleKeyDown);
     };
-  }, [dragState.isDragging, updateDrag, cancelDrag, findDropZoneAtPosition]);
+  }, [dragState.isDragging, dragState.isPendingDrag, updateDrag, cancelDrag, activateDrag, findDropZoneAtPosition]);
 
   return (
     <DragContext.Provider
