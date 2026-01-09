@@ -320,8 +320,8 @@ export const PdfPage = memo(function PdfPage({
       >
         {isVisible ? (
           <>
-            {/* PDF Canvas */}
-            <canvas ref={canvasRef} className="absolute top-0 left-0" />
+            {/* PDF Canvas - white bg to prevent flash of black during render */}
+            <canvas ref={canvasRef} className="absolute top-0 left-0 bg-white" />
 
             {/* Text Layer (for selection) */}
             <div
