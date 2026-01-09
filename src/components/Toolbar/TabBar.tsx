@@ -155,6 +155,9 @@ export function TabBar({ onTabChange }: TabBarProps) {
     updateStudyGroup(groupId, { color });
   };
 
+  // Track mouse down state for drag initiation
+  const mouseDownRef = useRef<{ tabId: string; startX: number; startY: number } | null>(null);
+
   // Mouse-based drag handlers (replaces HTML5 drag-and-drop)
   const handleTabMouseDown = (e: React.MouseEvent, tabId: string) => {
     // Only left mouse button
@@ -162,10 +165,40 @@ export function TabBar({ onTabChange }: TabBarProps) {
     // Don't start drag on close button
     if ((e.target as HTMLElement).closest("button")) return;
 
-    // Start pending drag - don't prevent default so onClick still fires
-    // Tab selection is handled by onClick, not onCancel callback
-    startDrag({ type: "tab", tabId }, e.clientX, e.clientY);
+    // Just record the mouse down position - don't start drag yet
+    // This allows onClick to fire normally for simple clicks
+    mouseDownRef.current = { tabId, startX: e.clientX, startY: e.clientY };
   };
+
+  // Start drag only when mouse actually moves past threshold
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!mouseDownRef.current) return;
+      if (dragState.isDragging || dragState.isPendingDrag) return;
+
+      const { tabId, startX, startY } = mouseDownRef.current;
+      const dx = Math.abs(e.clientX - startX);
+      const dy = Math.abs(e.clientY - startY);
+
+      // Only start drag if mouse moved past threshold
+      if (dx > 5 || dy > 5) {
+        startDrag({ type: "tab", tabId }, startX, startY);
+        mouseDownRef.current = null;
+      }
+    };
+
+    const handleMouseUp = () => {
+      // Clear the mouse down ref - click will be handled by onClick
+      mouseDownRef.current = null;
+    };
+
+    document.addEventListener("mousemove", handleMouseMove);
+    document.addEventListener("mouseup", handleMouseUp);
+    return () => {
+      document.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("mouseup", handleMouseUp);
+    };
+  }, [startDrag, dragState.isDragging, dragState.isPendingDrag]);
 
   // Handle tab drop
   const handleTabDrop = useCallback((data: DragData) => {
