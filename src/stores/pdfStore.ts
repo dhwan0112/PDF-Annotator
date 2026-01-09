@@ -67,13 +67,16 @@ export const usePdfStore = create<PdfState>()(
       rotation: 0,
     }),
 
-  setFilePath: (filePath) =>
+  setFilePath: (filePath) => {
+    // Don't update if path is the same (prevents unnecessary PDF reload)
+    if (get().filePath === filePath) return;
     set({
       filePath,
       currentPage: 1,
       scrollPosition: 0,
       rotation: 0,
-    }),
+    });
+  },
 
   clearFile: () =>
     set({
