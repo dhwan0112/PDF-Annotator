@@ -161,15 +161,9 @@ export function TabBar({ onTabChange }: TabBarProps) {
     // Don't start drag on close button
     if ((e.target as HTMLElement).closest("button")) return;
 
-    e.preventDefault();
-    // Pass onCancel callback to select the tab if drag threshold isn't reached
-    const tab = tabs.find(t => t.id === tabId);
-    startDrag({ type: "tab", tabId }, e.clientX, e.clientY, () => {
-      if (tab) {
-        setActiveTab(tabId);
-        onTabChange?.(tab);
-      }
-    });
+    // Start pending drag - don't prevent default so onClick still fires
+    // Tab selection is handled by onClick, not onCancel callback
+    startDrag({ type: "tab", tabId }, e.clientX, e.clientY);
   };
 
   // Handle tab drop
