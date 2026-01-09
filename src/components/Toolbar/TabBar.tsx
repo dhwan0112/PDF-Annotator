@@ -1,7 +1,8 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { X, FileText, ChevronDown, ChevronRight, FolderPlus } from "lucide-react";
+import { X, FileText, ChevronDown, ChevronRight, FolderPlus, ExternalLink } from "lucide-react";
 import { useTabStore, useStudyGroupStore, GROUP_COLORS } from "../../stores";
 import { useDrag } from "../../contexts";
+import { openInNewWindow } from "../../utils/windowUtils";
 import type { TabState } from "../../stores";
 import type { StudyGroup } from "../../types";
 import type { DragData, TabDragData } from "../../contexts";
@@ -161,15 +162,9 @@ export function TabBar({ onTabChange }: TabBarProps) {
     // Don't start drag on close button
     if ((e.target as HTMLElement).closest("button")) return;
 
-    e.preventDefault();
-    // Pass onCancel callback to select the tab if drag threshold isn't reached
-    const tab = tabs.find(t => t.id === tabId);
-    startDrag({ type: "tab", tabId }, e.clientX, e.clientY, () => {
-      if (tab) {
-        setActiveTab(tabId);
-        onTabChange?.(tab);
-      }
-    });
+    // Start pending drag - don't prevent default so onClick still fires
+    // Tab selection is handled by onClick, not onCancel callback
+    startDrag({ type: "tab", tabId }, e.clientX, e.clientY);
   };
 
   // Handle tab drop
@@ -238,8 +233,24 @@ export function TabBar({ onTabChange }: TabBarProps) {
         }
         moveTabToGroup(tabId, null);
       }
+      return;
     }
-  }, [tabs, dragState.position, reorderTab, moveTabToGroup, addDocumentToGroup, removeDocumentFromGroup]);
+
+    // Check for new window zone
+    const newWindowZone = elements.find(el => el.getAttribute("data-zone") === "new-window");
+    if (newWindowZone) {
+      const tab = tabs.find((t) => t.id === tabId);
+      if (tab) {
+        // Open in new window
+        openInNewWindow(tab.filePath).then((success) => {
+          if (success) {
+            // Close the tab in current window
+            closeTab(tabId);
+          }
+        });
+      }
+    }
+  }, [tabs, dragState.position, reorderTab, moveTabToGroup, addDocumentToGroup, removeDocumentFromGroup, closeTab]);
 
   // Register drop zone for tab bar
   const tabBarRef = useRef<HTMLDivElement>(null);
@@ -456,6 +467,17 @@ export function TabBar({ onTabChange }: TabBarProps) {
           </div>
         )}
       </div>
+
+      {/* New window drop zone - visible when dragging any tab */}
+      {draggingTabId && (
+        <div
+          data-zone="new-window"
+          className="flex items-center gap-1.5 px-3 py-1.5 mx-1 text-xs text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/30 border-2 border-dashed border-purple-400 rounded-lg cursor-pointer hover:bg-purple-100 dark:hover:bg-purple-900/50 transition-colors"
+        >
+          <ExternalLink className="w-3.5 h-3.5" />
+          새 창으로 열기
+        </div>
+      )}
 
       {/* Context menu */}
       {contextMenu && (
