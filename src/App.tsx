@@ -66,6 +66,22 @@ function App() {
     return () => mediaQuery.removeEventListener("change", handler);
   }, [theme]);
 
+  // Handle URL parameter to open file in new window
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const openFile = params.get("openFile");
+    if (openFile) {
+      const decodedPath = decodeURIComponent(openFile);
+      // Clear the URL parameter to prevent re-opening on refresh
+      window.history.replaceState({}, document.title, window.location.pathname);
+      // Open the file
+      setFilePath(decodedPath);
+      setCurrentView("viewer");
+      // Open as a tab
+      openTab(decodedPath, null, null, null);
+    }
+  }, [setFilePath, setCurrentView, openTab]);
+
   // Add document to library when PDF is loaded
   useEffect(() => {
     if (pdfDocument && filePath) {
