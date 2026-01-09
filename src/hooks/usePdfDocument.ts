@@ -31,6 +31,8 @@ export function usePdfDocument() {
       console.log("[usePdfDocument] Starting PDF load:", filePath);
       setLoading(true);
       setError(null);
+      // Clear previous document to show loading state
+      setPdfDocument(null);
 
       try {
         // Use Tauri fs plugin to read file
@@ -60,6 +62,7 @@ export function usePdfDocument() {
       } catch (err) {
         if (cancelled) return;
         console.error("[usePdfDocument] Failed to load PDF:", err);
+        console.log("[usePdfDocument] ERROR:", err instanceof Error ? err.message : String(err));
         setError(err instanceof Error ? err.message : "Failed to load PDF");
       } finally {
         if (!cancelled) {
