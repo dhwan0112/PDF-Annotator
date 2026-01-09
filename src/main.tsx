@@ -1,10 +1,60 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, Component, ErrorInfo, ReactNode } from "react";
 import ReactDOM from "react-dom/client";
 import { createPortal } from "react-dom";
 import App from "./App";
 import { DragProvider } from "./contexts";
 import { usePdfStore, useTabStore } from "./stores";
 import "./index.css";
+
+// Error Boundary to catch render errors
+interface ErrorBoundaryState {
+  hasError: boolean;
+  error: Error | null;
+}
+
+class ErrorBoundary extends Component<{ children: ReactNode }, ErrorBoundaryState> {
+  state: ErrorBoundaryState = { hasError: false, error: null };
+
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    console.error("[ErrorBoundary] Caught error:", error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{
+          position: "fixed",
+          inset: 0,
+          background: "#1a0000",
+          color: "#ff6666",
+          fontFamily: "monospace",
+          padding: "20px",
+          zIndex: 999999,
+          overflow: "auto",
+        }}>
+          <h1 style={{ color: "#ff0000" }}>🚨 React Render Error</h1>
+          <p>Something went wrong while rendering the application:</p>
+          <pre style={{ background: "#330000", padding: "10px", overflow: "auto", whiteSpace: "pre-wrap" }}>
+            {this.state.error?.message}
+            {"\n\n"}
+            {this.state.error?.stack}
+          </pre>
+          <button
+            onClick={() => this.setState({ hasError: false, error: null })}
+            style={{ marginTop: "20px", padding: "10px 20px", cursor: "pointer" }}
+          >
+            Try Again
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 // Always-visible debug status bar
 function DebugStatusBar() {
@@ -95,9 +145,11 @@ function DebugStatusBar() {
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>
-    <DragProvider>
-      <App />
-      <DebugStatusBar />
-    </DragProvider>
+    <ErrorBoundary>
+      <DragProvider>
+        <App />
+        <DebugStatusBar />
+      </DragProvider>
+    </ErrorBoundary>
   </React.StrictMode>,
 );
