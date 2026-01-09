@@ -174,11 +174,12 @@ export function DragProvider({ children }: { children: React.ReactNode }) {
     const handleMouseUp = (e: MouseEvent) => {
       // If still pending (threshold not reached), just cancel - treat as click
       if (dragState.isPendingDrag) {
-        // Call the onCancel callback if provided (e.g., to select a tab)
+        // Save the onCancel callback before clearing refs
         const onCancel = pendingDragRef.current?.onCancel;
         cancelDrag();
+        // Defer the callback to ensure state is fully cleared
         if (onCancel) {
-          onCancel();
+          setTimeout(onCancel, 0);
         }
         return;
       }
