@@ -75,10 +75,15 @@ export function TabBar() {
   }
 
   const handleTabClick = (tab: TabState) => {
-    // Don't do anything if clicking the already active tab
-    if (tab.id === activeTabId) return;
+    console.log("[TabBar] handleTabClick", { tabId: tab.id, activeTabId, filePath: tab.filePath });
 
-    // Just set active tab - the useEffect in App.tsx will sync the PDF state
+    // Don't do anything if clicking the already active tab
+    if (tab.id === activeTabId) {
+      console.log("[TabBar] Skipping - already active");
+      return;
+    }
+
+    console.log("[TabBar] Calling setActiveTab:", tab.id);
     setActiveTab(tab.id);
   };
 
