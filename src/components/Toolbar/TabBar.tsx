@@ -7,11 +7,7 @@ import type { TabState } from "../../stores";
 import type { StudyGroup } from "../../types";
 import type { DragData, TabDragData } from "../../contexts";
 
-interface TabBarProps {
-  onTabChange?: (tab: TabState) => void;
-}
-
-export function TabBar({ onTabChange }: TabBarProps) {
+export function TabBar() {
   const {
     tabs,
     activeTabId,
@@ -79,8 +75,11 @@ export function TabBar({ onTabChange }: TabBarProps) {
   }
 
   const handleTabClick = (tab: TabState) => {
+    // Don't do anything if clicking the already active tab
+    if (tab.id === activeTabId) return;
+
+    // Just set active tab - the useEffect in App.tsx will sync the PDF state
     setActiveTab(tab.id);
-    onTabChange?.(tab);
   };
 
   const handleCloseTab = (e: React.MouseEvent, tabId: string) => {

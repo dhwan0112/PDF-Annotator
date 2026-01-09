@@ -182,14 +182,6 @@ function App() {
     }
   }, [activeTabId, filePath, currentPage, updateTab]);
 
-  // Handle tab change
-  const handleTabChange = useCallback((tab: { filePath: string; currentPage: number; zoomLevel: number; viewMode: "single" | "continuous" }) => {
-    setFilePath(tab.filePath);
-    setCurrentPage(tab.currentPage);
-    setZoomLevel(tab.zoomLevel);
-    setViewMode(tab.viewMode);
-  }, [setFilePath, setCurrentPage, setZoomLevel, setViewMode]);
-
   // Get active study group's first mind map for split panel view
   // Use the currently active tab's study group
   const { getMindMapsForGroup, getMindMap, createMindMap } = useMindMapStore();
@@ -453,7 +445,7 @@ function App() {
       <Toolbar />
       {/* Tab bar - only show in viewer mode with open tabs */}
       {currentView === "viewer" && tabs.length > 0 && (
-        <TabBar onTabChange={handleTabChange} />
+        <TabBar />
       )}
       <div className="flex flex-1 overflow-hidden">
         {currentView === "library" ? (
