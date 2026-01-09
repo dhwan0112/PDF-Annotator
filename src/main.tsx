@@ -10,6 +10,7 @@ import "./index.css";
 function DebugStatusBar() {
   const [visible, setVisible] = useState(false);
   const [logs, setLogs] = useState<string[]>([]);
+  const [errors, setErrors] = useState<string[]>([]);
   const { filePath, currentPage } = usePdfStore();
   const { activeTabId, tabs } = useTabStore();
 
@@ -23,9 +24,11 @@ function DebugStatusBar() {
     return () => window.removeEventListener("keydown", handler);
   }, []);
 
-  // Intercept console.log
+  // Intercept console.log and console.error
   useEffect(() => {
     const originalLog = console.log;
+    const originalError = console.error;
+
     console.log = (...args) => {
       originalLog(...args);
       const msg = args.map((a) => (typeof a === "object" ? JSON.stringify(a) : String(a))).join(" ");
@@ -33,7 +36,27 @@ function DebugStatusBar() {
         setLogs((prev) => [...prev.slice(-15), msg]);
       }
     };
-    return () => { console.log = originalLog; };
+
+    console.error = (...args) => {
+      originalError(...args);
+      const msg = args.map((a) => (typeof a === "object" ? JSON.stringify(a) : String(a))).join(" ");
+      setErrors((prev) => [...prev.slice(-5), `[ERROR] ${msg}`]);
+      // Auto-show debug panel on error
+      setVisible(true);
+    };
+
+    // Also catch unhandled errors
+    const errorHandler = (e: ErrorEvent) => {
+      setErrors((prev) => [...prev.slice(-5), `[UNHANDLED] ${e.message}`]);
+      setVisible(true);
+    };
+    window.addEventListener("error", errorHandler);
+
+    return () => {
+      console.log = originalLog;
+      console.error = originalError;
+      window.removeEventListener("error", errorHandler);
+    };
   }, []);
 
   if (!visible) return null;
@@ -56,6 +79,12 @@ function DebugStatusBar() {
       <div style={{ color: "#ff0", marginBottom: "4px" }}>
         🐛 DEBUG (Ctrl+Shift+D) | activeTabId: {activeTabId || "null"} | filePath: {filePath ? "..." + filePath.slice(-30) : "null"} | page: {currentPage} | tabs: {tabs.length}
       </div>
+      {errors.length > 0 && (
+        <div style={{ background: "#500", padding: "4px", marginBottom: "4px", borderRadius: "4px" }}>
+          <div style={{ color: "#f55", fontWeight: "bold" }}>⚠️ ERRORS:</div>
+          {errors.map((err, i) => <div key={i} style={{ color: "#faa" }}>{err}</div>)}
+        </div>
+      )}
       <div style={{ borderTop: "1px solid #333", paddingTop: "4px" }}>
         {logs.map((log, i) => <div key={i}>{log}</div>)}
       </div>
