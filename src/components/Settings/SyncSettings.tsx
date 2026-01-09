@@ -350,11 +350,11 @@ export function SyncSettings({ onClose }: SyncSettingsProps) {
             onClick={handleExport}
             className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2 text-sm"
           >
-            <Download className="w-4 h-4" />
+            <Upload className="w-4 h-4" />
             데이터 내보내기
           </button>
           <label className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2 text-sm cursor-pointer">
-            <Upload className="w-4 h-4" />
+            <Download className="w-4 h-4" />
             데이터 가져오기
             <input
               type="file"
