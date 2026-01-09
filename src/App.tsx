@@ -446,6 +446,15 @@ function App() {
   // Check if we should show the drag handle
   const hasSelectedAnnotations = selectedAnnotationIds.size > 0;
 
+  // Debug: Log render state
+  console.log("[App] RENDER", {
+    currentView,
+    activeTabId,
+    filePath: filePath ? "..." + filePath.slice(-30) : null,
+    pdfDocument: pdfDocument ? "loaded" : "null",
+    tabsCount: tabs.length,
+  });
+
   return (
     <div className="flex flex-col h-screen bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100">
       <Toolbar />
