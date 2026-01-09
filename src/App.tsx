@@ -160,12 +160,18 @@ function App() {
 
   // Sync pdfStore with active tab state
   useEffect(() => {
+    console.log("[App] Tab sync useEffect triggered", { activeTabId, currentFilePath: filePath });
     const activeTab = getActiveTab();
+    console.log("[App] Active tab:", activeTab ? { id: activeTab.id, filePath: activeTab.filePath } : null);
+
     if (activeTab && activeTab.filePath !== filePath) {
+      console.log("[App] Setting new file path:", activeTab.filePath);
       setFilePath(activeTab.filePath);
       setCurrentPage(activeTab.currentPage);
       setZoomLevel(activeTab.zoomLevel);
       setViewMode(activeTab.viewMode);
+    } else {
+      console.log("[App] Skipping - filePath same or no activeTab");
     }
   }, [activeTabId, getActiveTab, filePath, setFilePath, setCurrentPage, setZoomLevel, setViewMode]);
 
