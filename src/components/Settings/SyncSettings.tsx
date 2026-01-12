@@ -55,8 +55,8 @@ export function SyncSettings({ onClose }: SyncSettingsProps) {
   } | null>(null);
 
   // Get library documents and study groups
-  const { documents } = useLibraryStore();
-  const { getGroupForDocument } = useStudyGroupStore();
+  const { documents, addDocument } = useLibraryStore();
+  const { studyGroups, getGroupForDocument, createStudyGroup, addDocumentToGroup } = useStudyGroupStore();
 
   // Check connection on mount
   useEffect(() => {
@@ -111,6 +111,16 @@ export function SyncSettings({ onClose }: SyncSettingsProps) {
     }
   }, [syncDropbox]);
 
+  // Helper to find or create study group by name
+  const findOrCreateStudyGroup = useCallback((groupName: string): string => {
+    const existing = studyGroups.find((g) => g.name === groupName);
+    if (existing) {
+      return existing.id;
+    }
+    // Create new study group with a random color
+    return createStudyGroup(groupName);
+  }, [studyGroups, createStudyGroup]);
+
   // Handle PDF sync
   const handlePdfSync = useCallback(async () => {
     setPdfSyncInProgress(true);
@@ -132,6 +142,29 @@ export function SyncSettings({ onClose }: SyncSettingsProps) {
         setPdfSyncProgress(message);
       });
 
+      // Add downloaded files to library and study groups
+      if (result.downloadedInfo && result.downloadedInfo.length > 0) {
+        setPdfSyncProgress("라이브러리에 파일 추가 중...");
+
+        for (const downloadedFile of result.downloadedInfo) {
+          try {
+            // Add to library
+            const newDoc = await addDocument(
+              downloadedFile.localPath,
+              downloadedFile.fileName
+            );
+
+            // Add to study group if applicable
+            if (newDoc && downloadedFile.studyGroupName) {
+              const groupId = findOrCreateStudyGroup(downloadedFile.studyGroupName);
+              addDocumentToGroup(groupId, newDoc.id);
+            }
+          } catch (err) {
+            console.error(`Failed to add ${downloadedFile.fileName} to library:`, err);
+          }
+        }
+      }
+
       setPdfSyncResult({
         uploaded: result.uploaded.length,
         downloaded: result.downloaded.length,
@@ -139,7 +172,7 @@ export function SyncSettings({ onClose }: SyncSettingsProps) {
       });
 
       if (result.downloaded.length > 0) {
-        setPdfSyncProgress(`${result.downloaded.length}개 파일 다운로드 완료! 라이브러리에서 확인하세요.`);
+        setPdfSyncProgress(`${result.downloaded.length}개 파일 다운로드 및 라이브러리 추가 완료!`);
       } else if (result.uploaded.length > 0) {
         setPdfSyncProgress(`${result.uploaded.length}개 파일 업로드 완료!`);
       } else {
@@ -150,7 +183,7 @@ export function SyncSettings({ onClose }: SyncSettingsProps) {
     } finally {
       setPdfSyncInProgress(false);
     }
-  }, [documents, getGroupForDocument]);
+  }, [documents, getGroupForDocument, addDocument, findOrCreateStudyGroup, addDocumentToGroup]);
 
   // Handle export
   const handleExport = useCallback(() => {
