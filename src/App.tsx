@@ -457,7 +457,7 @@ function App() {
 
   return (
     <div className="flex flex-col h-screen bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100">
-      <Toolbar />
+      <Toolbar pdfDocument={pdfDocument} />
       {/* Tab bar - only show in viewer mode with open tabs */}
       {currentView === "viewer" && tabs.length > 0 && (
         <TabBar />
