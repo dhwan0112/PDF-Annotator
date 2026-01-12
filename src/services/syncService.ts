@@ -251,4 +251,4 @@ export async function syncPdfFiles(
 }
 
 // Re-export for convenience
-export { syncAllPdfs, type PdfSyncResult };
+export { syncAllPdfs, type PdfSyncResult, type DownloadedPdfInfo } from "./fileStorageService";

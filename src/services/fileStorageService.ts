@@ -277,9 +277,16 @@ export async function listDropboxPdfs(): Promise<{
 }
 
 // Sync all PDFs (upload local, download remote)
+export interface DownloadedPdfInfo {
+  fileName: string;
+  localPath: string;
+  studyGroupName: string | null;
+}
+
 export interface PdfSyncResult {
   uploaded: string[];
   downloaded: string[];
+  downloadedInfo: DownloadedPdfInfo[];
   errors: string[];
 }
 
@@ -290,6 +297,7 @@ export async function syncAllPdfs(
   const result: PdfSyncResult = {
     uploaded: [],
     downloaded: [],
+    downloadedInfo: [],
     errors: [],
   };
 
@@ -330,6 +338,11 @@ export async function syncAllPdfs(
           );
           if (localPath) {
             result.downloaded.push(remotePdf.fileName);
+            result.downloadedInfo.push({
+              fileName: remotePdf.fileName,
+              localPath,
+              studyGroupName: remotePdf.studyGroup,
+            });
           }
         } catch (err) {
           result.errors.push(`Download failed: ${remotePdf.fileName}`);
