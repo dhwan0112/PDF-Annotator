@@ -11,10 +11,12 @@ import {
   Settings,
   Key,
   X,
+  FileText,
+  FolderSync,
 } from "lucide-react";
 import { open } from "@tauri-apps/plugin-shell";
-import { useSyncStore } from "../../stores";
-import { exportSyncData, importSyncData } from "../../services/syncService";
+import { useSyncStore, useLibraryStore, useStudyGroupStore } from "../../stores";
+import { exportSyncData, importSyncData, syncPdfFiles } from "../../services/syncService";
 
 interface SyncSettingsProps {
   onClose: () => void;
@@ -42,6 +44,19 @@ export function SyncSettings({ onClose }: SyncSettingsProps) {
   const [callbackCode, setCallbackCode] = useState("");
   const [showCallbackInput, setShowCallbackInput] = useState(false);
   const [importFile, setImportFile] = useState<File | null>(null);
+
+  // PDF sync state
+  const [pdfSyncInProgress, setPdfSyncInProgress] = useState(false);
+  const [pdfSyncProgress, setPdfSyncProgress] = useState<string>("");
+  const [pdfSyncResult, setPdfSyncResult] = useState<{
+    uploaded: number;
+    downloaded: number;
+    errors: number;
+  } | null>(null);
+
+  // Get library documents and study groups
+  const { documents } = useLibraryStore();
+  const { getGroupForDocument } = useStudyGroupStore();
 
   // Check connection on mount
   useEffect(() => {
@@ -95,6 +110,47 @@ export function SyncSettings({ onClose }: SyncSettingsProps) {
       }
     }
   }, [syncDropbox]);
+
+  // Handle PDF sync
+  const handlePdfSync = useCallback(async () => {
+    setPdfSyncInProgress(true);
+    setPdfSyncProgress("PDF 파일 준비 중...");
+    setPdfSyncResult(null);
+
+    try {
+      // Collect local PDFs with their study group names
+      const localPdfs = documents.map((doc) => {
+        const group = getGroupForDocument(doc.id);
+        return {
+          path: doc.file_path,
+          studyGroupName: group?.name || null,
+        };
+      });
+
+      // Sync PDFs
+      const result = await syncPdfFiles(localPdfs, (message) => {
+        setPdfSyncProgress(message);
+      });
+
+      setPdfSyncResult({
+        uploaded: result.uploaded.length,
+        downloaded: result.downloaded.length,
+        errors: result.errors.length,
+      });
+
+      if (result.downloaded.length > 0) {
+        setPdfSyncProgress(`${result.downloaded.length}개 파일 다운로드 완료! 라이브러리에서 확인하세요.`);
+      } else if (result.uploaded.length > 0) {
+        setPdfSyncProgress(`${result.uploaded.length}개 파일 업로드 완료!`);
+      } else {
+        setPdfSyncProgress("모든 PDF가 동기화되어 있습니다.");
+      }
+    } catch (err) {
+      setPdfSyncProgress(`오류: ${err instanceof Error ? err.message : "알 수 없는 오류"}`);
+    } finally {
+      setPdfSyncInProgress(false);
+    }
+  }, [documents, getGroupForDocument]);
 
   // Handle export
   const handleExport = useCallback(() => {
@@ -337,6 +393,47 @@ export function SyncSettings({ onClose }: SyncSettingsProps) {
               </select>
             )}
           </div>
+        </div>
+      )}
+
+      {/* PDF File Sync */}
+      {isConnected && (
+        <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
+          <h4 className="font-medium text-gray-900 dark:text-gray-100 mb-3 flex items-center gap-2">
+            <FolderSync className="w-4 h-4" />
+            PDF 파일 동기화
+          </h4>
+          <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+            PDF 파일을 Dropbox에 업로드하고 다른 기기에서 다운로드합니다.
+            스터디 그룹별로 폴더가 생성됩니다.
+          </p>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={handlePdfSync}
+              disabled={pdfSyncInProgress || syncInProgress}
+              className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 flex items-center gap-2"
+            >
+              <FileText className={`w-4 h-4 ${pdfSyncInProgress ? "animate-pulse" : ""}`} />
+              {pdfSyncInProgress ? "동기화 중..." : "PDF 동기화"}
+            </button>
+            <span className="text-sm text-gray-500">
+              {documents.length}개 PDF 파일
+            </span>
+          </div>
+          {pdfSyncProgress && (
+            <div className={`mt-3 p-2 rounded text-sm ${
+              pdfSyncResult?.errors ? "bg-yellow-50 dark:bg-yellow-900/20 text-yellow-700 dark:text-yellow-300" :
+              "bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300"
+            }`}>
+              {pdfSyncProgress}
+            </div>
+          )}
+          {pdfSyncResult && (
+            <div className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+              업로드: {pdfSyncResult.uploaded} | 다운로드: {pdfSyncResult.downloaded}
+              {pdfSyncResult.errors > 0 && ` | 오류: ${pdfSyncResult.errors}`}
+            </div>
+          )}
         </div>
       )}
 
