@@ -3,6 +3,8 @@
  * Supports: Dropbox, GitHub (future)
  */
 
+import { syncAllPdfs, type PdfSyncResult } from "./fileStorageService";
+
 // Types for sync data
 export interface SyncData {
   version: number;
@@ -14,6 +16,15 @@ export interface SyncData {
   studyGroups: Record<string, unknown>;
   settings: Record<string, unknown>;
   library: LibrarySyncData | null;
+  // PDF file references for sync
+  pdfFiles?: PdfFileReference[];
+}
+
+// Reference to a PDF file for sync
+export interface PdfFileReference {
+  fileName: string;
+  studyGroupName: string | null;
+  dropboxPath: string | null;
 }
 
 // Library sync data (simplified version without full paths)
@@ -230,3 +241,14 @@ export function importSyncData(file: File): Promise<void> {
     reader.readAsText(file);
   });
 }
+
+// Sync PDF files along with metadata
+export async function syncPdfFiles(
+  localPdfs: { path: string; studyGroupName: string | null }[],
+  onProgress?: (message: string) => void
+): Promise<PdfSyncResult> {
+  return syncAllPdfs(localPdfs, onProgress);
+}
+
+// Re-export for convenience
+export { syncAllPdfs, type PdfSyncResult };
