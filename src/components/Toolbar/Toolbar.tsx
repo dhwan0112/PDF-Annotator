@@ -15,6 +15,7 @@ import {
   ZoomOut,
   FolderOpen,
   Save,
+  Printer,
   Moon,
   Sun,
   Monitor,
@@ -41,6 +42,7 @@ import type { AnnotationTool, SelectionMode } from "../../types";
 import { ToolSettingsPopover } from "./ToolSettingsPopover";
 import { KeyboardShortcutsSettings, SyncSettings } from "../Settings";
 import { exportAnnotationsToPdf } from "../../utils";
+import { printWithAnnotations } from "../../services/printService";
 
 const tools: { id: AnnotationTool; icon: typeof Pen; label: string }[] = [
   { id: "select", icon: MousePointer2, label: "Select (V)" },
@@ -61,8 +63,14 @@ const selectionModes: { id: SelectionMode; icon: typeof Lasso; label: string }[]
   { id: "text", icon: Type, label: "텍스트 선택" },
 ];
 
-export function Toolbar() {
-  const { currentTool, setCurrentTool, selectionMode, setSelectionMode, undo, redo, undoStack, redoStack, getToolSettings } =
+import type { PDFDocumentProxy } from "pdfjs-dist";
+
+interface ToolbarProps {
+  pdfDocument?: PDFDocumentProxy | null;
+}
+
+export function Toolbar({ pdfDocument }: ToolbarProps) {
+  const { currentTool, setCurrentTool, selectionMode, setSelectionMode, undo, redo, undoStack, redoStack, getToolSettings, annotations } =
     useAnnotationStore();
   const {
     filePath,
@@ -89,6 +97,7 @@ export function Toolbar() {
   const [showSyncSettings, setShowSyncSettings] = useState(false);
   const [showThemeMenu, setShowThemeMenu] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isPrinting, setIsPrinting] = useState(false);
   const toolButtonRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
 
   const handleOpenFile = async () => {
@@ -186,6 +195,22 @@ export function Toolbar() {
     }
   };
 
+  const handlePrint = async () => {
+    if (!pdfDocument || isPrinting) return;
+
+    try {
+      setIsPrinting(true);
+      await printWithAnnotations({
+        pdfDocument,
+        annotations,
+      });
+    } catch (error) {
+      console.error("Failed to print:", error);
+    } finally {
+      setIsPrinting(false);
+    }
+  };
+
   const handleBackToLibrary = () => {
     setCurrentView("library");
   };
@@ -270,6 +295,12 @@ export function Toolbar() {
           label="Save PDF with annotations (Ctrl+S)"
           onClick={handleSaveWithAnnotations}
           disabled={!filePath || isSaving}
+        />
+        <ToolbarButton
+          icon={Printer}
+          label="Print with annotations (Ctrl+P)"
+          onClick={handlePrint}
+          disabled={!pdfDocument || isPrinting}
         />
       </div>
 
