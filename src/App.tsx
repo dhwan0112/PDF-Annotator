@@ -160,18 +160,13 @@ function App() {
 
   // Sync pdfStore with active tab state
   useEffect(() => {
-    console.log("[App] Tab sync useEffect triggered", { activeTabId, currentFilePath: filePath });
     const activeTab = getActiveTab();
-    console.log("[App] Active tab:", activeTab ? { id: activeTab.id, filePath: activeTab.filePath } : null);
 
     if (activeTab && activeTab.filePath !== filePath) {
-      console.log("[App] Setting new file path:", activeTab.filePath);
       setFilePath(activeTab.filePath);
       setCurrentPage(activeTab.currentPage);
       setZoomLevel(activeTab.zoomLevel);
       setViewMode(activeTab.viewMode);
-    } else {
-      console.log("[App] Skipping - filePath same or no activeTab");
     }
   }, [activeTabId, getActiveTab, filePath, setFilePath, setCurrentPage, setZoomLevel, setViewMode]);
 
@@ -445,15 +440,6 @@ function App() {
 
   // Check if we should show the drag handle
   const hasSelectedAnnotations = selectedAnnotationIds.size > 0;
-
-  // Debug: Log render state
-  console.log("[App] RENDER", {
-    currentView,
-    activeTabId,
-    filePath: filePath ? "..." + filePath.slice(-30) : null,
-    pdfDocument: pdfDocument ? "loaded" : "null",
-    tabsCount: tabs.length,
-  });
 
   return (
     <div className="flex flex-col h-screen bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100">
