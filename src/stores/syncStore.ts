@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { dropboxService, type DropboxSyncResult } from "../services/dropboxService";
+import type { ConflictItem } from "../types/sync";
 
 export type SyncProvider = "dropbox" | "github" | null;
 
@@ -16,9 +17,16 @@ interface SyncState {
   syncInProgress: boolean;
   error: string | null;
 
+  // Conflict handling
+  pendingConflicts: ConflictItem[];
+  showConflictDialog: boolean;
+
   // Auto sync settings
   autoSyncEnabled: boolean;
   autoSyncInterval: number; // minutes
+
+  // Device info
+  deviceName: string;
 
   // Actions
   setProvider: (provider: SyncProvider) => void;
@@ -27,6 +35,13 @@ interface SyncState {
   setSyncInProgress: (inProgress: boolean) => void;
   setError: (error: string | null) => void;
   setAutoSync: (enabled: boolean, interval?: number) => void;
+  setDeviceName: (name: string) => void;
+
+  // Conflict actions
+  setPendingConflicts: (conflicts: ConflictItem[]) => void;
+  setShowConflictDialog: (show: boolean) => void;
+  resolveConflicts: (resolvedConflicts: ConflictItem[]) => Promise<void>;
+  clearConflicts: () => void;
 
   // Dropbox actions
   connectDropbox: (appKey: string) => Promise<string>;
@@ -46,8 +61,11 @@ export const useSyncStore = create<SyncState>()(
       lastSync: null,
       syncInProgress: false,
       error: null,
+      pendingConflicts: [],
+      showConflictDialog: false,
       autoSyncEnabled: false,
       autoSyncInterval: 15,
+      deviceName: "",
 
       setProvider: (provider) => set({ provider }),
       setConnected: (connected) => set({ isConnected: connected }),
@@ -58,6 +76,38 @@ export const useSyncStore = create<SyncState>()(
       setAutoSync: (enabled, interval) => set({
         autoSyncEnabled: enabled,
         autoSyncInterval: interval ?? get().autoSyncInterval,
+      }),
+
+      setDeviceName: (name) => {
+        localStorage.setItem("marginalia-device-name", name);
+        set({ deviceName: name });
+      },
+
+      setPendingConflicts: (conflicts) => set({ pendingConflicts: conflicts }),
+      setShowConflictDialog: (show) => set({ showConflictDialog: show }),
+
+      resolveConflicts: async (resolvedConflicts) => {
+        try {
+          set({ syncInProgress: true, error: null });
+
+          // Apply resolutions and continue sync
+          await dropboxService.applyConflictResolutions(resolvedConflicts);
+
+          set({
+            pendingConflicts: [],
+            showConflictDialog: false,
+            lastSync: new Date().toISOString(),
+            syncInProgress: false,
+          });
+        } catch (error) {
+          const message = error instanceof Error ? error.message : "Failed to resolve conflicts";
+          set({ error: message, syncInProgress: false });
+        }
+      },
+
+      clearConflicts: () => set({
+        pendingConflicts: [],
+        showConflictDialog: false,
       }),
 
       connectDropbox: async (appKey) => {
@@ -101,6 +151,20 @@ export const useSyncStore = create<SyncState>()(
           const result = await dropboxService.sync();
 
           if (result.success) {
+            // Check for conflicts
+            if (result.conflicts && result.conflicts.length > 0) {
+              set({
+                pendingConflicts: result.conflicts,
+                showConflictDialog: true,
+                syncInProgress: false,
+              });
+              return {
+                success: false,
+                error: `${result.conflicts.length} conflict(s) need resolution`,
+                conflicts: result.conflicts,
+              };
+            }
+
             set({
               lastSync: result.lastSync || new Date().toISOString(),
               syncInProgress: false,
@@ -128,6 +192,8 @@ export const useSyncStore = create<SyncState>()(
           isConnected: false,
           lastSync: null,
           error: null,
+          pendingConflicts: [],
+          showConflictDialog: false,
         });
       },
 
@@ -146,6 +212,7 @@ export const useSyncStore = create<SyncState>()(
         lastSync: state.lastSync,
         autoSyncEnabled: state.autoSyncEnabled,
         autoSyncInterval: state.autoSyncInterval,
+        deviceName: state.deviceName,
       }),
     }
   )
@@ -155,5 +222,11 @@ export const useSyncStore = create<SyncState>()(
 if (typeof window !== "undefined") {
   setTimeout(() => {
     useSyncStore.getState().checkConnection();
+
+    // Load device name
+    const deviceName = localStorage.getItem("marginalia-device-name");
+    if (deviceName) {
+      useSyncStore.setState({ deviceName });
+    }
   }, 100);
 }
