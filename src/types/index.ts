@@ -1,4 +1,5 @@
 export * from "./annotation";
+export * from "./sync";
 
 export interface PdfMetadata {
   path: string;

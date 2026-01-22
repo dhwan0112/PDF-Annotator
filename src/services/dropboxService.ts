@@ -9,7 +9,15 @@
  * 5. Add redirect URI: http://localhost:8374/callback
  */
 
-import { collectSyncData, applySyncData, mergeSyncData, type SyncData } from "./syncService";
+import {
+  collectSyncData,
+  applySyncData,
+  mergeSyncData,
+  applyConflictResolutions,
+  type SyncData,
+  type MergeResult,
+} from "./syncService";
+import type { ConflictItem } from "../types/sync";
 
 // Dropbox OAuth configuration
 const DROPBOX_AUTH_URL = "https://www.dropbox.com/oauth2/authorize";
@@ -48,12 +56,18 @@ export interface DropboxSyncResult {
   success: boolean;
   error?: string;
   lastSync?: string;
-  conflicts?: Array<{ field: string; resolution: string }>;
+  conflicts?: ConflictItem[];
+  changes?: {
+    uploaded: number;
+    downloaded: number;
+    merged: number;
+  };
 }
 
 class DropboxService {
   private config: DropboxConfig | null = null;
   private codeVerifier: string | null = null;
+  private pendingMergeResult: MergeResult | null = null;
 
   constructor() {
     this.loadConfig();
@@ -264,7 +278,7 @@ class DropboxService {
     return JSON.parse(text) as SyncData;
   }
 
-  // Perform full sync
+  // Perform full sync with conflict detection
   async sync(): Promise<DropboxSyncResult> {
     try {
       // Collect local data
@@ -274,18 +288,33 @@ class DropboxService {
       const remoteData = await this.download();
 
       if (remoteData) {
-        // Merge data
-        const mergedData = mergeSyncData(localData, remoteData);
+        // Merge data with conflict detection
+        const mergeResult = mergeSyncData(localData, remoteData);
 
-        // Apply merged data locally
-        applySyncData(mergedData);
+        // Check for conflicts
+        if (mergeResult.hasConflicts) {
+          // Store pending merge for resolution
+          this.pendingMergeResult = mergeResult;
 
-        // Upload merged data
-        await this.upload(mergedData);
+          return {
+            success: false,
+            error: `${mergeResult.conflicts.length} conflict(s) detected`,
+            conflicts: mergeResult.conflicts,
+          };
+        }
+
+        // No conflicts - apply and upload
+        applySyncData(mergeResult.data);
+        await this.upload(mergeResult.data);
 
         return {
           success: true,
           lastSync: new Date().toISOString(),
+          changes: {
+            uploaded: 1,
+            downloaded: 1,
+            merged: 1,
+          },
         };
       } else {
         // First sync - just upload local data
@@ -294,6 +323,11 @@ class DropboxService {
         return {
           success: true,
           lastSync: new Date().toISOString(),
+          changes: {
+            uploaded: 1,
+            downloaded: 0,
+            merged: 0,
+          },
         };
       }
     } catch (error) {
@@ -302,6 +336,28 @@ class DropboxService {
         error: error instanceof Error ? error.message : "Sync failed",
       };
     }
+  }
+
+  // Apply conflict resolutions and complete sync
+  async applyConflictResolutions(resolvedConflicts: ConflictItem[]): Promise<void> {
+    if (!this.pendingMergeResult) {
+      throw new Error("No pending merge to resolve");
+    }
+
+    // Apply resolutions to merged data
+    const resolvedData = applyConflictResolutions(
+      this.pendingMergeResult.data,
+      resolvedConflicts
+    );
+
+    // Apply locally
+    applySyncData(resolvedData);
+
+    // Upload resolved data
+    await this.upload(resolvedData);
+
+    // Clear pending merge
+    this.pendingMergeResult = null;
   }
 
   // Create a folder in Dropbox
@@ -459,6 +515,7 @@ class DropboxService {
   // Disconnect from Dropbox
   disconnect(): void {
     this.config = null;
+    this.pendingMergeResult = null;
     this.saveConfig();
   }
 }
