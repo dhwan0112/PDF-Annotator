@@ -1,23 +1,41 @@
 /**
- * Sync Service - Manages cloud synchronization for Marginalia
+ * Sync Service - Vector Clock based synchronization for Marginalia
  * Supports: Dropbox, GitHub (future)
  */
 
 import { syncAllPdfs, type PdfSyncResult } from "./fileStorageService";
+import {
+  type VectorClock,
+  type ConflictItem,
+  type EntityType,
+  type SyncChangeLog,
+  VectorClockUtils,
+  generateDeviceId,
+} from "../types/sync";
 
 // Types for sync data
 export interface SyncData {
   version: number;
+  deviceId: string;
   lastModified: string;
-  annotations: Record<string, unknown>;
-  bookmarks: Record<string, unknown>;
-  bibtex: Record<string, unknown>;
-  mindMaps: Record<string, unknown>;
-  studyGroups: Record<string, unknown>;
-  settings: Record<string, unknown>;
+  vectorClock: VectorClock;
+  annotations: SyncEntity<Record<string, unknown>>;
+  bookmarks: SyncEntity<Record<string, unknown>>;
+  bibtex: SyncEntity<Record<string, unknown>>;
+  mindMaps: SyncEntity<Record<string, unknown>>;
+  studyGroups: SyncEntity<Record<string, unknown>>;
+  settings: SyncEntity<Record<string, unknown>>;
   library: LibrarySyncData | null;
-  // PDF file references for sync
   pdfFiles?: PdfFileReference[];
+  // Change log for conflict detection
+  changeLog?: SyncChangeLog[];
+}
+
+// Entity with vector clock for per-item tracking
+export interface SyncEntity<T> {
+  data: T;
+  vectorClock: VectorClock;
+  lastModified: string;
 }
 
 // Reference to a PDF file for sync
@@ -35,7 +53,7 @@ export interface LibrarySyncData {
 
 export interface SyncDocument {
   id: string;
-  fileName: string;  // Just the filename, not full path
+  fileName: string;
   title: string | null;
   author: string | null;
   pageCount: number | null;
@@ -71,47 +89,84 @@ export interface SyncConflict {
   remoteTimestamp: string;
 }
 
+export interface MergeResult {
+  data: SyncData;
+  conflicts: ConflictItem[];
+  hasConflicts: boolean;
+}
+
+// Get the current device ID
+const deviceId = generateDeviceId();
+
+// Local vector clock state (persisted)
+function getLocalVectorClock(): VectorClock {
+  try {
+    const stored = localStorage.getItem("marginalia-vector-clock");
+    if (stored) return JSON.parse(stored);
+  } catch {
+    // Ignore parse errors
+  }
+  return VectorClockUtils.create(deviceId);
+}
+
+function saveLocalVectorClock(clock: VectorClock): void {
+  localStorage.setItem("marginalia-vector-clock", JSON.stringify(clock));
+}
+
+function incrementLocalClock(): VectorClock {
+  const clock = VectorClockUtils.increment(getLocalVectorClock(), deviceId);
+  saveLocalVectorClock(clock);
+  return clock;
+}
+
 // Extract filename from path (cross-platform)
 function getFileName(filePath: string): string {
   return filePath.split(/[\\/]/).pop() || filePath;
 }
 
-// Convert path-keyed annotations to filename-keyed for sync
-function convertAnnotationsToFilenameKeys(annotations: Record<string, unknown>): Record<string, unknown> {
+// Convert path-keyed data to filename-keyed for sync
+function convertToFilenameKeys(data: Record<string, unknown>): Record<string, unknown> {
   const result: Record<string, unknown> = {};
-  for (const [path, data] of Object.entries(annotations)) {
+  for (const [path, value] of Object.entries(data)) {
     const fileName = getFileName(path);
-    result[fileName] = data;
+    result[fileName] = value;
   }
   return result;
 }
 
-// Convert filename-keyed annotations back to path-keyed (matching local files)
-function convertAnnotationsToPathKeys(
-  annotations: Record<string, unknown>,
-  localAnnotations: Record<string, unknown>
+// Convert filename-keyed data back to path-keyed (matching local files)
+function convertToPathKeys(
+  remoteData: Record<string, unknown>,
+  localData: Record<string, unknown>
 ): Record<string, unknown> {
-  const result: Record<string, unknown> = { ...localAnnotations };
+  const result: Record<string, unknown> = { ...localData };
 
   // Create a map of filename -> local path
   const fileNameToPath: Record<string, string> = {};
-  for (const path of Object.keys(localAnnotations)) {
+  for (const path of Object.keys(localData)) {
     const fileName = getFileName(path);
     fileNameToPath[fileName] = path;
   }
 
-  // Apply remote annotations using matched paths
-  for (const [fileName, data] of Object.entries(annotations)) {
+  // Apply remote data using matched paths
+  for (const [fileName, data] of Object.entries(remoteData)) {
     if (fileNameToPath[fileName]) {
-      // Use existing local path
       result[fileNameToPath[fileName]] = data;
     } else {
-      // Keep filename as key for files not yet opened locally
       result[fileName] = data;
     }
   }
 
   return result;
+}
+
+// Create a sync entity wrapper
+function createSyncEntity<T>(data: T): SyncEntity<T> {
+  return {
+    data,
+    vectorClock: getLocalVectorClock(),
+    lastModified: new Date().toISOString(),
+  };
 }
 
 // Collect all sync data from localStorage
@@ -125,24 +180,28 @@ export function collectSyncData(): SyncData {
     }
   };
 
-  // Get annotations and convert to filename-based keys for sync
+  // Get annotations and convert to filename-based keys
   const rawAnnotations = getData("marginalia-annotations") || {};
-  const filenameAnnotations = convertAnnotationsToFilenameKeys(rawAnnotations);
+  const filenameAnnotations = convertToFilenameKeys(rawAnnotations);
 
   // Get bookmarks and convert to filename-based keys
   const rawBookmarks = getData("marginalia-bookmarks") || {};
-  const filenameBookmarks = convertAnnotationsToFilenameKeys(rawBookmarks);
+  const filenameBookmarks = convertToFilenameKeys(rawBookmarks);
+
+  const currentClock = incrementLocalClock();
 
   return {
-    version: 2,  // Version 2 uses filename-based keys
+    version: 3, // Version 3 includes vector clocks
+    deviceId,
     lastModified: new Date().toISOString(),
-    annotations: filenameAnnotations,
-    bookmarks: filenameBookmarks,
-    bibtex: getData("marginalia-bibtex") || {},
-    mindMaps: getData("marginalia-mind-maps") || {},
-    studyGroups: getData("marginalia-study-groups") || {},
-    settings: getData("marginalia-settings") || {},
-    library: null, // Library is synced separately via database
+    vectorClock: currentClock,
+    annotations: createSyncEntity(filenameAnnotations),
+    bookmarks: createSyncEntity(filenameBookmarks),
+    bibtex: createSyncEntity(getData("marginalia-bibtex") || {}),
+    mindMaps: createSyncEntity(getData("marginalia-mind-maps") || {}),
+    studyGroups: createSyncEntity(getData("marginalia-study-groups") || {}),
+    settings: createSyncEntity(getData("marginalia-settings") || {}),
+    library: null,
   };
 }
 
@@ -163,45 +222,246 @@ export function applySyncData(data: SyncData): void {
     }
   };
 
-  // Convert filename-based keys back to path-based keys using local data
+  // Handle both version 2 (no vector clocks) and version 3 (with vector clocks)
+  const getEntityData = (entity: SyncEntity<Record<string, unknown>> | Record<string, unknown>): Record<string, unknown> => {
+    if ('data' in entity && 'vectorClock' in entity) {
+      return entity.data as Record<string, unknown>;
+    }
+    return entity as Record<string, unknown>;
+  };
+
+  // Convert filename-based keys back to path-based keys
   const localAnnotations = getData("marginalia-annotations");
   const localBookmarks = getData("marginalia-bookmarks");
 
-  const mergedAnnotations = convertAnnotationsToPathKeys(
-    data.annotations as Record<string, unknown>,
-    localAnnotations
-  );
-  const mergedBookmarks = convertAnnotationsToPathKeys(
-    data.bookmarks as Record<string, unknown>,
-    localBookmarks
-  );
+  const annotationsData = getEntityData(data.annotations);
+  const bookmarksData = getEntityData(data.bookmarks);
+
+  const mergedAnnotations = convertToPathKeys(annotationsData, localAnnotations);
+  const mergedBookmarks = convertToPathKeys(bookmarksData, localBookmarks);
 
   setData("marginalia-annotations", mergedAnnotations);
   setData("marginalia-bookmarks", mergedBookmarks);
-  setData("marginalia-bibtex", data.bibtex);
-  setData("marginalia-mind-maps", data.mindMaps);
-  setData("marginalia-study-groups", data.studyGroups);
-  setData("marginalia-settings", data.settings);
+  setData("marginalia-bibtex", getEntityData(data.bibtex));
+  setData("marginalia-mind-maps", getEntityData(data.mindMaps));
+  setData("marginalia-study-groups", getEntityData(data.studyGroups));
+  setData("marginalia-settings", getEntityData(data.settings));
+
+  // Update local vector clock to merged state
+  if (data.vectorClock) {
+    const mergedClock = VectorClockUtils.merge(getLocalVectorClock(), data.vectorClock);
+    saveLocalVectorClock(mergedClock);
+  }
 }
 
-// Merge sync data (simple last-write-wins strategy)
-export function mergeSyncData(local: SyncData, remote: SyncData): SyncData {
-  const localTime = new Date(local.lastModified).getTime();
-  const remoteTime = new Date(remote.lastModified).getTime();
+// Detect conflicts between two sync entities
+function detectEntityConflict<T>(
+  local: SyncEntity<T> | T,
+  remote: SyncEntity<T> | T,
+  entityType: EntityType,
+  entityId: string
+): ConflictItem | null {
+  // Handle legacy data without vector clocks
+  const localEntity = 'vectorClock' in (local as object)
+    ? local as SyncEntity<T>
+    : { data: local, vectorClock: getLocalVectorClock(), lastModified: new Date().toISOString() };
 
-  // Simple strategy: use the most recent data
-  // For more complex merging, we'd need to compare individual items
-  if (remoteTime > localTime) {
-    return {
-      ...remote,
-      lastModified: new Date().toISOString(),
-    };
+  const remoteEntity = 'vectorClock' in (remote as object)
+    ? remote as SyncEntity<T>
+    : { data: remote, vectorClock: {}, lastModified: new Date().toISOString() };
+
+  // Check if clocks are concurrent (neither dominates)
+  if (VectorClockUtils.isConcurrent(localEntity.vectorClock, remoteEntity.vectorClock)) {
+    // Check if data is actually different
+    const localJson = JSON.stringify(localEntity.data);
+    const remoteJson = JSON.stringify(remoteEntity.data);
+
+    if (localJson !== remoteJson) {
+      return {
+        id: `${entityType}-${entityId}`,
+        entityType,
+        entityId,
+        entityName: entityId,
+        localVersion: {
+          id: crypto.randomUUID(),
+          deviceId,
+          timestamp: new Date(localEntity.lastModified).getTime(),
+          entityType,
+          entityId,
+          operation: "update",
+          payload: localJson,
+          vectorClock: localEntity.vectorClock,
+        },
+        remoteVersion: {
+          id: crypto.randomUUID(),
+          deviceId: "remote",
+          timestamp: new Date(remoteEntity.lastModified).getTime(),
+          entityType,
+          entityId,
+          operation: "update",
+          payload: remoteJson,
+          vectorClock: remoteEntity.vectorClock,
+        },
+        localData: localEntity.data,
+        remoteData: remoteEntity.data,
+      };
+    }
   }
 
-  return {
-    ...local,
-    lastModified: new Date().toISOString(),
+  return null;
+}
+
+// Merge sync data with conflict detection
+export function mergeSyncData(local: SyncData, remote: SyncData): MergeResult {
+  const conflicts: ConflictItem[] = [];
+
+  // Helper to merge entities
+  const mergeEntity = <T>(
+    localEntity: SyncEntity<T> | T,
+    remoteEntity: SyncEntity<T> | T,
+    entityType: EntityType,
+    entityId: string
+  ): SyncEntity<T> => {
+    const conflict = detectEntityConflict(localEntity, remoteEntity, entityType, entityId);
+
+    if (conflict) {
+      conflicts.push(conflict);
+      // Default: use remote for now, will be resolved by user
+      const remoteData = 'data' in (remoteEntity as object)
+        ? (remoteEntity as SyncEntity<T>).data
+        : remoteEntity as T;
+      return {
+        data: remoteData,
+        vectorClock: VectorClockUtils.merge(
+          'vectorClock' in (localEntity as object) ? (localEntity as SyncEntity<T>).vectorClock : {},
+          'vectorClock' in (remoteEntity as object) ? (remoteEntity as SyncEntity<T>).vectorClock : {}
+        ),
+        lastModified: new Date().toISOString(),
+      };
+    }
+
+    // No conflict - use the dominant version
+    const localClock = 'vectorClock' in (localEntity as object)
+      ? (localEntity as SyncEntity<T>).vectorClock
+      : getLocalVectorClock();
+    const remoteClock = 'vectorClock' in (remoteEntity as object)
+      ? (remoteEntity as SyncEntity<T>).vectorClock
+      : {};
+
+    const comparison = VectorClockUtils.compare(localClock, remoteClock);
+
+    if (comparison >= 0) {
+      // Local dominates or equal
+      const localData = 'data' in (localEntity as object)
+        ? (localEntity as SyncEntity<T>).data
+        : localEntity as T;
+      return {
+        data: localData,
+        vectorClock: VectorClockUtils.merge(localClock, remoteClock),
+        lastModified: new Date().toISOString(),
+      };
+    } else {
+      // Remote dominates
+      const remoteData = 'data' in (remoteEntity as object)
+        ? (remoteEntity as SyncEntity<T>).data
+        : remoteEntity as T;
+      return {
+        data: remoteData,
+        vectorClock: VectorClockUtils.merge(localClock, remoteClock),
+        lastModified: new Date().toISOString(),
+      };
+    }
   };
+
+  // Merge all entities
+  const mergedData: SyncData = {
+    version: 3,
+    deviceId,
+    lastModified: new Date().toISOString(),
+    vectorClock: VectorClockUtils.merge(local.vectorClock || {}, remote.vectorClock || {}),
+    annotations: mergeEntity(local.annotations, remote.annotations, "annotation", "all"),
+    bookmarks: mergeEntity(local.bookmarks, remote.bookmarks, "bookmark", "all"),
+    bibtex: mergeEntity(local.bibtex, remote.bibtex, "bibtex", "all"),
+    mindMaps: mergeEntity(local.mindMaps, remote.mindMaps, "mindmap", "all"),
+    studyGroups: mergeEntity(local.studyGroups, remote.studyGroups, "study_group", "all"),
+    settings: mergeEntity(local.settings, remote.settings, "settings", "all"),
+    library: null,
+  };
+
+  return {
+    data: mergedData,
+    conflicts,
+    hasConflicts: conflicts.length > 0,
+  };
+}
+
+// Resolve a conflict with a chosen resolution
+export function resolveConflict(conflict: ConflictItem, resolution: "local" | "remote"): unknown {
+  if (resolution === "local") {
+    return conflict.localData;
+  }
+  return conflict.remoteData;
+}
+
+// Apply conflict resolutions to sync data
+export function applyConflictResolutions(
+  data: SyncData,
+  conflicts: ConflictItem[]
+): SyncData {
+  const result = { ...data };
+
+  for (const conflict of conflicts) {
+    if (!conflict.resolution || conflict.resolution === "skip") continue;
+
+    const resolvedData = conflict.resolution === "local"
+      ? conflict.localData
+      : conflict.remoteData;
+
+    switch (conflict.entityType) {
+      case "annotation":
+        result.annotations = {
+          ...result.annotations,
+          data: resolvedData as Record<string, unknown>,
+        };
+        break;
+      case "bookmark":
+        result.bookmarks = {
+          ...result.bookmarks,
+          data: resolvedData as Record<string, unknown>,
+        };
+        break;
+      case "bibtex":
+        result.bibtex = {
+          ...result.bibtex,
+          data: resolvedData as Record<string, unknown>,
+        };
+        break;
+      case "mindmap":
+        result.mindMaps = {
+          ...result.mindMaps,
+          data: resolvedData as Record<string, unknown>,
+        };
+        break;
+      case "study_group":
+        result.studyGroups = {
+          ...result.studyGroups,
+          data: resolvedData as Record<string, unknown>,
+        };
+        break;
+      case "settings":
+        result.settings = {
+          ...result.settings,
+          data: resolvedData as Record<string, unknown>,
+        };
+        break;
+    }
+  }
+
+  // Increment clock after resolution
+  result.vectorClock = incrementLocalClock();
+  result.lastModified = new Date().toISOString();
+
+  return result;
 }
 
 // Export sync data as JSON file (for manual backup)
@@ -252,3 +512,4 @@ export async function syncPdfFiles(
 
 // Re-export for convenience
 export { syncAllPdfs, type PdfSyncResult, type DownloadedPdfInfo } from "./fileStorageService";
+export { getDeviceInfo, setDeviceName } from "../types/sync";
