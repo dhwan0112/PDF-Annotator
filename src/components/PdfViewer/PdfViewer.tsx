@@ -151,16 +151,7 @@ export function PdfViewer({ pdfDocument }: PdfViewerProps) {
     };
   }, [handleScroll]);
 
-  // Debug: Log render state
-  console.log("[PdfViewer] RENDER", {
-    filePath: filePath ? "..." + filePath.slice(-30) : null,
-    pdfDocument: pdfDocument ? "loaded" : "null",
-    currentPage,
-    totalPages,
-  });
-
   if (!filePath) {
-    console.log("[PdfViewer] Rendering: No PDF loaded state");
     return (
       <div className="flex-1 flex flex-col items-center justify-center bg-gray-100 dark:bg-gray-900 text-gray-500 dark:text-gray-400">
         <FileText className="w-16 h-16 mb-4 opacity-50" />
@@ -171,7 +162,6 @@ export function PdfViewer({ pdfDocument }: PdfViewerProps) {
   }
 
   if (!pdfDocument) {
-    console.log("[PdfViewer] Rendering: Loading state");
     return (
       <div className="flex-1 flex flex-col items-center justify-center bg-gray-100 dark:bg-gray-900 text-gray-500 dark:text-gray-400">
         <Loader2 className="w-12 h-12 mb-4 animate-spin" />
@@ -184,8 +174,6 @@ export function PdfViewer({ pdfDocument }: PdfViewerProps) {
     viewMode === "continuous"
       ? Array.from({ length: totalPages }, (_, i) => i + 1)
       : [currentPage];
-
-  console.log("[PdfViewer] Rendering: PDF view with", pagesToRender.length, "pages");
 
   return (
     <div

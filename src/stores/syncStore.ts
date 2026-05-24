@@ -24,6 +24,7 @@ interface SyncState {
   // Auto sync settings
   autoSyncEnabled: boolean;
   autoSyncInterval: number; // minutes
+  syncSession: boolean; // Sync tabs/scroll position across devices
 
   // Device info
   deviceName: string;
@@ -35,6 +36,7 @@ interface SyncState {
   setSyncInProgress: (inProgress: boolean) => void;
   setError: (error: string | null) => void;
   setAutoSync: (enabled: boolean, interval?: number) => void;
+  setSyncSession: (enabled: boolean) => void;
   setDeviceName: (name: string) => void;
 
   // Conflict actions
@@ -65,6 +67,7 @@ export const useSyncStore = create<SyncState>()(
       showConflictDialog: false,
       autoSyncEnabled: false,
       autoSyncInterval: 15,
+      syncSession: false,
       deviceName: "",
 
       setProvider: (provider) => set({ provider }),
@@ -77,6 +80,8 @@ export const useSyncStore = create<SyncState>()(
         autoSyncEnabled: enabled,
         autoSyncInterval: interval ?? get().autoSyncInterval,
       }),
+
+      setSyncSession: (enabled) => set({ syncSession: enabled }),
 
       setDeviceName: (name) => {
         localStorage.setItem("marginalia-device-name", name);

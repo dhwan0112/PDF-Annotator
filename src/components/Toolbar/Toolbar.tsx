@@ -40,7 +40,7 @@ import { save } from "@tauri-apps/plugin-dialog";
 import { readFile, writeFile } from "@tauri-apps/plugin-fs";
 import type { AnnotationTool, SelectionMode } from "../../types";
 import { ToolSettingsPopover } from "./ToolSettingsPopover";
-import { KeyboardShortcutsSettings, SyncSettings } from "../Settings";
+import { KeyboardShortcutsSettings, SyncSettings, SyncStatusIndicator } from "../Settings";
 import { exportAnnotationsToPdf } from "../../utils";
 import { printWithAnnotations } from "../../services/printService";
 
@@ -157,7 +157,6 @@ export function Toolbar({ pdfDocument }: ToolbarProps) {
       });
 
       if (allAnnotations.length === 0) {
-        console.log("No annotations to save");
         setIsSaving(false);
         return;
       }
@@ -186,7 +185,6 @@ export function Toolbar({ pdfDocument }: ToolbarProps) {
 
       if (savePath) {
         await writeFile(savePath, modifiedPdf);
-        console.log("PDF saved with annotations:", savePath);
       }
     } catch (error) {
       console.error("Failed to save PDF with annotations:", error);
@@ -239,6 +237,9 @@ export function Toolbar({ pdfDocument }: ToolbarProps) {
         </div>
 
         <div className="flex-1" />
+
+        {/* Sync status indicator */}
+        <SyncStatusIndicator />
 
         {/* Sync settings */}
         <ToolbarButton
@@ -487,6 +488,9 @@ export function Toolbar({ pdfDocument }: ToolbarProps) {
       </div>
 
       <div className="flex-1" />
+
+      {/* Sync status indicator */}
+      <SyncStatusIndicator />
 
       {/* Sync settings */}
       <ToolbarButton

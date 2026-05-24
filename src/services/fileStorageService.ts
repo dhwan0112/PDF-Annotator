@@ -15,6 +15,7 @@
 import { documentDir, join } from "@tauri-apps/api/path";
 import { mkdir, copyFile, exists, readFile, writeFile } from "@tauri-apps/plugin-fs";
 import { dropboxService } from "./dropboxService";
+import { debug } from "../utils";
 
 const APP_FOLDER_NAME = "Marginalia";
 const UNGROUPED_FOLDER = "Ungrouped";
@@ -98,20 +99,20 @@ export async function copyPdfToAppFolder(
     // Check if already in app folder
     const appFolder = await getAppFolderPath();
     if (sourcePath.includes(appFolder)) {
-      console.log("[FileStorage] File already in app folder:", sourcePath);
+      debug.log("[FileStorage] File already in app folder:", sourcePath);
       return sourcePath;
     }
 
     // Check if target exists
     const targetExists = await exists(targetPath);
     if (targetExists) {
-      console.log("[FileStorage] File already exists in target:", targetPath);
+      debug.log("[FileStorage] File already exists in target:", targetPath);
       return targetPath;
     }
 
     // Copy file
     await copyFile(sourcePath, targetPath);
-    console.log("[FileStorage] Copied PDF to app folder:", targetPath);
+    debug.log("[FileStorage] Copied PDF to app folder:", targetPath);
 
     return targetPath;
   } catch (err) {
@@ -141,7 +142,7 @@ export async function movePdfToStudyGroup(
     await writeFile(targetPath, data);
 
     // Delete is not critical, skip for now (Tauri doesn't have remove in plugin-fs)
-    console.log("[FileStorage] Moved PDF to:", targetPath);
+    debug.log("[FileStorage] Moved PDF to:", targetPath);
 
     return targetPath;
   } catch (err) {
@@ -157,7 +158,7 @@ export async function uploadPdfToDropbox(
 ): Promise<string | null> {
   try {
     if (!dropboxService.isConnected()) {
-      console.log("[FileStorage] Dropbox not connected, skipping upload");
+      debug.log("[FileStorage] Dropbox not connected, skipping upload");
       return null;
     }
 
@@ -178,7 +179,7 @@ export async function uploadPdfToDropbox(
 
     // Upload
     await dropboxService.uploadFile(dropboxPath, fileData.buffer);
-    console.log("[FileStorage] Uploaded to Dropbox:", dropboxPath);
+    debug.log("[FileStorage] Uploaded to Dropbox:", dropboxPath);
 
     return dropboxPath;
   } catch (err) {
@@ -194,7 +195,7 @@ export async function downloadPdfFromDropbox(
 ): Promise<string | null> {
   try {
     if (!dropboxService.isConnected()) {
-      console.log("[FileStorage] Dropbox not connected, skipping download");
+      debug.log("[FileStorage] Dropbox not connected, skipping download");
       return null;
     }
 
@@ -205,14 +206,14 @@ export async function downloadPdfFromDropbox(
     // Check if already exists
     const localExists = await exists(localPath);
     if (localExists) {
-      console.log("[FileStorage] File already exists locally:", localPath);
+      debug.log("[FileStorage] File already exists locally:", localPath);
       return localPath;
     }
 
     // Download from Dropbox
     const fileData = await dropboxService.downloadFile(dropboxPath);
     if (!fileData) {
-      console.log("[FileStorage] File not found on Dropbox:", dropboxPath);
+      debug.log("[FileStorage] File not found on Dropbox:", dropboxPath);
       return null;
     }
 
@@ -222,7 +223,7 @@ export async function downloadPdfFromDropbox(
 
     // Write to local
     await writeFile(localPath, new Uint8Array(fileData));
-    console.log("[FileStorage] Downloaded from Dropbox:", localPath);
+    debug.log("[FileStorage] Downloaded from Dropbox:", localPath);
 
     return localPath;
   } catch (err) {
