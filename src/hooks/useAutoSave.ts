@@ -17,18 +17,8 @@ export function useAutoSave(options: AutoSaveOptions = {}) {
 
   // Force save all state (zustand persist auto-syncs, this just logs)
   const forceSave = useCallback(() => {
-    // The stores with persist middleware auto-save to localStorage
-    // This function triggers a manual sync and logs the event
     lastSaveRef.current = new Date();
     saveCountRef.current += 1;
-
-    // Log for debugging
-    console.log(
-      `[AutoSave] Periodic save #${saveCountRef.current} at ${lastSaveRef.current.toLocaleTimeString()}`
-    );
-
-    // Force zustand persist to sync (stores already auto-sync, but this ensures it)
-    // The persist middleware handles the actual saving
   }, []);
 
   // Periodic auto-save

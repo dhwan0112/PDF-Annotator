@@ -30,11 +30,13 @@ export function SyncSettings({ onClose }: SyncSettingsProps) {
     error,
     autoSyncEnabled,
     autoSyncInterval,
+    syncSession,
     connectDropbox,
     handleDropboxCallback,
     syncDropbox,
     disconnectDropbox,
     setAutoSync,
+    setSyncSession,
     checkConnection,
   } = useSyncStore();
 
@@ -425,6 +427,22 @@ export function SyncSettings({ onClose }: SyncSettingsProps) {
                 <option value={60}>1시간마다</option>
               </select>
             )}
+          </div>
+
+          {/* Session Sync Toggle */}
+          <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+            <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+              <input
+                type="checkbox"
+                checked={syncSession}
+                onChange={(e) => setSyncSession(e.target.checked)}
+                className="w-4 h-4 text-blue-600 rounded"
+              />
+              세션 동기화 (탭, 스크롤 위치)
+            </label>
+            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              다른 기기에서 열린 탭과 읽기 위치를 자동으로 동기화합니다.
+            </p>
           </div>
         </div>
       )}

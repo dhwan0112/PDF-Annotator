@@ -5,7 +5,7 @@ import { PdfViewer } from "./components/PdfViewer";
 import { Library } from "./components/Library";
 import { MindMapCanvas } from "./components/MindMap";
 import { useUiStore, usePdfStore, useAnnotationStore, useLibraryStore, useSettingsStore, useStudyGroupStore, useMindMapStore, useTabStore } from "./stores";
-import { usePdfDocument, useAnnotationPersistence, useBookmarkPersistence, useAutoSave, usePenTablet, useSessionRestore } from "./hooks";
+import { usePdfDocument, useAnnotationPersistence, useBookmarkPersistence, useAutoSave, usePenTablet, useSessionRestore, useAutoSync } from "./hooks";
 import { useDrag } from "./contexts";
 import { GripVertical, Network } from "lucide-react";
 
@@ -23,6 +23,7 @@ function App() {
   useAutoSave({ interval: 30000 }); // Periodic backup every 30 seconds
   usePenTablet(); // Auto-switch to pen tool when stylus detected
   useSessionRestore(); // Restore previous session on startup
+  useAutoSync(); // Automatic cloud sync when enabled
   const {
     zoomIn,
     zoomOut,

@@ -69,15 +69,9 @@ export const usePdfStore = create<PdfState>()(
 
   setFilePath: (filePath) => {
     const currentPath = get().filePath;
-    console.log("[pdfStore] setFilePath called", { newPath: filePath, currentPath, isSame: currentPath === filePath });
-
-    // Don't update if path is the same (prevents unnecessary PDF reload)
     if (currentPath === filePath) {
-      console.log("[pdfStore] Skipping - same path");
       return;
     }
-
-    console.log("[pdfStore] Updating filePath to:", filePath);
     set({
       filePath,
       currentPage: 1,
@@ -195,6 +189,7 @@ export const usePdfStore = create<PdfState>()(
         zoomLevel: state.zoomLevel,
         rotation: state.rotation,
         viewMode: state.viewMode,
+        scrollPosition: state.scrollPosition,
       }),
     }
   )

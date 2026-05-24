@@ -57,7 +57,6 @@ export function useBookmarkPersistence() {
         bookmarksJson: json,
       });
       lastSavedRef.current = json;
-      console.log("Bookmarks saved");
     } catch (error) {
       console.error("Failed to save bookmarks:", error);
     }
@@ -78,7 +77,6 @@ export function useBookmarkPersistence() {
         const loadedBookmarks = deserializeBookmarks(data);
         setBookmarks(loadedBookmarks);
         lastSavedRef.current = json;
-        console.log("Bookmarks loaded");
       } else {
         clearBookmarks();
         lastSavedRef.current = "";

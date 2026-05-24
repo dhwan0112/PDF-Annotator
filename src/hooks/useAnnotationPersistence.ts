@@ -68,7 +68,6 @@ export function useAnnotationPersistence() {
         annotationsJson: json,
       });
       lastSavedRef.current = json;
-      console.log("Annotations saved");
     } catch (error) {
       console.error("Failed to save annotations:", error);
     }
@@ -88,14 +87,12 @@ export function useAnnotationPersistence() {
         const data: SerializedAnnotations = JSON.parse(json);
         const map = deserializeAnnotations(data);
 
-        // Update store with loaded annotations
         useAnnotationStore.setState({
           annotations: map,
           undoStack: [],
           redoStack: [],
         });
         lastSavedRef.current = json;
-        console.log("Annotations loaded");
       } else {
         // Clear annotations for new file
         clearAnnotations();

@@ -4,3 +4,4 @@ export { useBookmarkPersistence } from "./useBookmarkPersistence";
 export { useAutoSave } from "./useAutoSave";
 export { usePenTablet } from "./usePenTablet";
 export { useSessionRestore } from "./useSessionRestore";
+export { useAutoSync } from "./useAutoSync";

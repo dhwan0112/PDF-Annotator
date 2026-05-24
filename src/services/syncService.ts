@@ -27,7 +27,7 @@ export interface SyncData {
   settings: SyncEntity<Record<string, unknown>>;
   library: LibrarySyncData | null;
   pdfFiles?: PdfFileReference[];
-  // Change log for conflict detection
+  session?: SessionState;
   changeLog?: SyncChangeLog[];
 }
 
@@ -87,6 +87,21 @@ export interface SyncConflict {
   remoteValue: unknown;
   localTimestamp: string;
   remoteTimestamp: string;
+}
+
+export interface SessionState {
+  tabs: SessionTab[];
+  activeTabIndex: number;
+  deviceTimestamps: Record<string, number>;
+}
+
+export interface SessionTab {
+  fileName: string;
+  documentId: string | null;
+  currentPage: number;
+  scrollPosition: number;
+  zoomLevel: number;
+  groupId: string | null;
 }
 
 export interface MergeResult {
@@ -169,6 +184,47 @@ function createSyncEntity<T>(data: T): SyncEntity<T> {
   };
 }
 
+// Collect session state from tab store
+function collectSessionState(): SessionState {
+  try {
+    const tabData = localStorage.getItem("marginalia-tabs");
+    if (!tabData) {
+      return { tabs: [], activeTabIndex: -1, deviceTimestamps: { [deviceId]: Date.now() } };
+    }
+
+    const parsed = JSON.parse(tabData);
+    const state = parsed.state || parsed;
+    const tabs = state.tabs || [];
+    const activeTabId = state.activeTabId;
+
+    const sessionTabs: SessionTab[] = tabs.map((tab: {
+      filePath: string;
+      documentId: string | null;
+      currentPage: number;
+      scrollPosition: number;
+      zoomLevel: number;
+      groupId: string | null;
+    }) => ({
+      fileName: getFileName(tab.filePath),
+      documentId: tab.documentId,
+      currentPage: tab.currentPage,
+      scrollPosition: tab.scrollPosition,
+      zoomLevel: tab.zoomLevel,
+      groupId: tab.groupId,
+    }));
+
+    const activeTabIndex = tabs.findIndex((t: { id: string }) => t.id === activeTabId);
+
+    return {
+      tabs: sessionTabs,
+      activeTabIndex,
+      deviceTimestamps: { [deviceId]: Date.now() },
+    };
+  } catch {
+    return { tabs: [], activeTabIndex: -1, deviceTimestamps: { [deviceId]: Date.now() } };
+  }
+}
+
 // Collect all sync data from localStorage
 export function collectSyncData(): SyncData {
   const getData = (key: string) => {
@@ -202,6 +258,7 @@ export function collectSyncData(): SyncData {
     studyGroups: createSyncEntity(getData("marginalia-study-groups") || {}),
     settings: createSyncEntity(getData("marginalia-settings") || {}),
     library: null,
+    session: collectSessionState(),
   };
 }
 
@@ -252,6 +309,88 @@ export function applySyncData(data: SyncData): void {
     const mergedClock = VectorClockUtils.merge(getLocalVectorClock(), data.vectorClock);
     saveLocalVectorClock(mergedClock);
   }
+}
+
+// Apply session state from remote (if newer)
+export function applySessionState(
+  remoteSession: SessionState | undefined,
+  localFilePaths: string[]
+): boolean {
+  if (!remoteSession || remoteSession.tabs.length === 0) {
+    return false;
+  }
+
+  // Check if session sync is enabled in settings
+  const settings = localStorage.getItem("marginalia-settings");
+  let syncSession = false;
+  try {
+    if (settings) {
+      const parsed = JSON.parse(settings);
+      syncSession = parsed.syncSession === true;
+    }
+  } catch {
+    // Ignore
+  }
+
+  if (!syncSession) {
+    return false;
+  }
+
+  // Check if remote is more recent
+  const remoteTimestamp = Math.max(...Object.values(remoteSession.deviceTimestamps));
+  const localTabData = localStorage.getItem("marginalia-tabs");
+  let localTimestamp = 0;
+  try {
+    if (localTabData) {
+      const parsed = JSON.parse(localTabData);
+      localTimestamp = parsed.lastUpdated || 0;
+    }
+  } catch {
+    // Ignore
+  }
+
+  if (localTimestamp >= remoteTimestamp) {
+    return false;
+  }
+
+  // Build filename to path map
+  const fileNameToPath: Record<string, string> = {};
+  for (const path of localFilePaths) {
+    const fileName = getFileName(path);
+    fileNameToPath[fileName] = path;
+  }
+
+  // Create new tabs matching local paths
+  const newTabs = remoteSession.tabs
+    .filter(tab => fileNameToPath[tab.fileName])
+    .map((tab, index) => ({
+      id: `tab-sync-${Date.now()}-${index}`,
+      filePath: fileNameToPath[tab.fileName],
+      documentId: tab.documentId,
+      metadata: null,
+      currentPage: tab.currentPage,
+      totalPages: 0,
+      zoomLevel: tab.zoomLevel,
+      rotation: 0,
+      viewMode: "continuous" as const,
+      scrollPosition: tab.scrollPosition,
+      groupId: tab.groupId,
+    }));
+
+  if (newTabs.length > 0) {
+    const activeTabId = remoteSession.activeTabIndex >= 0 && remoteSession.activeTabIndex < newTabs.length
+      ? newTabs[remoteSession.activeTabIndex].id
+      : newTabs[0].id;
+
+    localStorage.setItem("marginalia-tabs", JSON.stringify({
+      state: { tabs: newTabs, activeTabId },
+      version: 0,
+      lastUpdated: Date.now(),
+    }));
+    return true;
+  }
+
+  return false;
 }
 
 // Detect conflicts between two sync entities

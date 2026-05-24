@@ -75,15 +75,9 @@ export function TabBar() {
   }
 
   const handleTabClick = (tab: TabState) => {
-    console.log("[TabBar] handleTabClick", { tabId: tab.id, activeTabId, filePath: tab.filePath });
-
-    // Don't do anything if clicking the already active tab
     if (tab.id === activeTabId) {
-      console.log("[TabBar] Skipping - already active");
       return;
     }
-
-    console.log("[TabBar] Calling setActiveTab:", tab.id);
     setActiveTab(tab.id);
   };
 
