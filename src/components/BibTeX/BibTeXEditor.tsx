@@ -442,8 +442,14 @@ export function BibTeXEditor({
                     </span>
                   )}
                   {metadata.confidence !== undefined && (
-                    <span className="px-1.5 py-0.5 bg-gray-100 dark:bg-gray-700 rounded">
-                      {Math.round(metadata.confidence * 100)}% confidence
+                    <span className={`px-1.5 py-0.5 rounded ${
+                      metadata.confidence >= 0.8
+                        ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300"
+                        : metadata.confidence >= 0.5
+                        ? "bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300"
+                        : "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300"
+                    }`}>
+                      {Math.round(metadata.confidence * 100)}% 신뢰도
                     </span>
                   )}
                 </div>
